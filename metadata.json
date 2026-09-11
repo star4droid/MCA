@@ -1,0 +1,6 @@
+{
+  "name": "Minecraft Animation Creator",
+  "description": "Minecraft 3D animation editor with scene hierarchy, keyframes, timelines, character rigs, transform gizmos, and real-time playback.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

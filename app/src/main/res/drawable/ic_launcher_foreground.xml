@@ -1,0 +1,64 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Drop Shadow -->
+    <path
+        android:fillColor="#33000000"
+        android:pathData="M54,88 L78,74 L54,60 L30,74 Z" />
+
+    <!-- Isometric 3D Voxel Block (Center 54, 52) -->
+    <!-- Top Face (Grass / Emerald highlight) -->
+    <path
+        android:fillColor="#4ADE80"
+        android:pathData="M54,28 L78,41 L54,54 L30,41 Z" />
+
+    <!-- Top Face Detail Pixel Grid -->
+    <path
+        android:fillColor="#22C55E"
+        android:pathData="M46,37 L54,41 L50,44 L42,39 Z" />
+    <path
+        android:fillColor="#16A34A"
+        android:pathData="M58,35 L66,39 L62,42 L54,37 Z" />
+    <path
+        android:fillColor="#86EFAC"
+        android:pathData="M54,45 L62,49 L58,52 L50,47 Z" />
+
+    <!-- Left Face (Dirt / Dark Slate) -->
+    <path
+        android:fillColor="#854D0E"
+        android:pathData="M30,41 L54,54 L54,78 L30,65 Z" />
+    <!-- Left Face Pixel Details -->
+    <path
+        android:fillColor="#713F12"
+        android:pathData="M34,49 L42,53 L42,60 L34,55 Z" />
+    <path
+        android:fillColor="#A16207"
+        android:pathData="M44,57 L50,60 L50,67 L44,63 Z" />
+    <path
+        android:fillColor="#15803D"
+        android:pathData="M30,41 L54,54 L54,58 L46,54 L44,57 L38,53 L36,56 L30,52 Z" />
+
+    <!-- Right Face (Darker Shaded Dirt) -->
+    <path
+        android:fillColor="#5A330A"
+        android:pathData="M54,54 L78,41 L78,65 L54,78 Z" />
+    <!-- Right Face Grass Overhang -->
+    <path
+        android:fillColor="#166534"
+        android:pathData="M54,54 L78,41 L78,49 L72,52 L70,49 L64,53 L62,56 L54,58 Z" />
+
+    <!-- Animation Filmstrip / Keyframe Golden Diamond Overlay -->
+    <path
+        android:fillColor="#FBBF24"
+        android:pathData="M54,44 L64,54 L54,64 L44,54 Z" />
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M54,47 L61,54 L54,61 L47,54 Z" />
+
+    <!-- Play Icon Triangle inside diamond -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M52,50 L58,54 L52,58 Z" />
+</vector>
