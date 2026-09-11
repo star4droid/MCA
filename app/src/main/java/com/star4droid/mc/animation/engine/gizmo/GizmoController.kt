@@ -5,8 +5,10 @@ import com.star4droid.mc.animation.engine.history.TransformCommand
 import com.star4droid.mc.animation.engine.math.Mat4
 import com.star4droid.mc.animation.engine.math.Ray
 import com.star4droid.mc.animation.engine.math.Vec3
+import com.star4droid.mc.animation.engine.scene.CharacterPartType
 import com.star4droid.mc.animation.engine.scene.SceneGraph
 import com.star4droid.mc.animation.engine.scene.SceneNode
+import com.star4droid.mc.animation.engine.scene.SceneNodeType
 import com.star4droid.mc.animation.engine.scene.Transform
 import kotlin.math.abs
 
@@ -59,9 +61,63 @@ class GizmoController(
         return GizmoAxis.NONE
     }
 
+    private var targetScaleNode: SceneNode? = null
+
+    private fun findCharacterRoot(node: SceneNode): SceneNode {
+        var cur = node
+        while (cur.parentId != null && cur.type == SceneNodeType.CHARACTER_PART) {
+            val parent = sceneGraph.getNode(cur.parentId!!) ?: break
+            cur = parent
+        }
+        return cur
+    }
+
+    private fun clampSkeletalRotation(partType: com.star4droid.mc.animation.engine.scene.CharacterPartType?, rot: Vec3): Vec3 {
+        return when (partType) {
+            com.star4droid.mc.animation.engine.scene.CharacterPartType.HEAD -> Vec3(
+                rot.x.coerceIn(-60f, 50f),
+                rot.y.coerceIn(-85f, 85f),
+                rot.z.coerceIn(-35f, 35f)
+            )
+            com.star4droid.mc.animation.engine.scene.CharacterPartType.RIGHT_ARM -> Vec3(
+                rot.x.coerceIn(-180f, 90f),
+                rot.y.coerceIn(-45f, 45f),
+                rot.z.coerceIn(-135f, 15f)
+            )
+            com.star4droid.mc.animation.engine.scene.CharacterPartType.LEFT_ARM -> Vec3(
+                rot.x.coerceIn(-180f, 90f),
+                rot.y.coerceIn(-45f, 45f),
+                rot.z.coerceIn(-15f, 135f)
+            )
+            com.star4droid.mc.animation.engine.scene.CharacterPartType.RIGHT_LEG -> Vec3(
+                rot.x.coerceIn(-85f, 80f),
+                rot.y.coerceIn(-25f, 25f),
+                rot.z.coerceIn(-30f, 20f)
+            )
+            com.star4droid.mc.animation.engine.scene.CharacterPartType.LEFT_LEG -> Vec3(
+                rot.x.coerceIn(-85f, 80f),
+                rot.y.coerceIn(-25f, 25f),
+                rot.z.coerceIn(-20f, 30f)
+            )
+            com.star4droid.mc.animation.engine.scene.CharacterPartType.BODY -> Vec3(
+                rot.x.coerceIn(-35f, 35f),
+                rot.y.coerceIn(-45f, 45f),
+                rot.z.coerceIn(-25f, 25f)
+            )
+            else -> rot
+        }
+    }
+
     fun startDrag(selectedNode: SceneNode, axis: GizmoAxis, initialRay: Ray) {
         activeAxis = axis
-        initialTransform = selectedNode.baseTransform.copyTransform()
+        if (currentMode == EditorMode.SCALE && selectedNode.type == SceneNodeType.CHARACTER_PART) {
+            val root = findCharacterRoot(selectedNode)
+            targetScaleNode = root
+            initialTransform = root.baseTransform.copyTransform()
+        } else {
+            targetScaleNode = null
+            initialTransform = selectedNode.baseTransform.copyTransform()
+        }
         val nodePos = selectedNode.getWorldPosition()
 
         // Choose plane normal for raycasting
@@ -92,6 +148,11 @@ class GizmoController(
 
         when (currentMode) {
             EditorMode.MOVE -> {
+                // Skeleton constraints: Limbs are anchored to joints; only character root can translate
+                if (selectedNode.type == SceneNodeType.CHARACTER_PART) {
+                    // Locked to joint: body parts cannot be detached from the skeleton
+                    return
+                }
                 var posDelta = Vec3.ZERO
                 when (activeAxis) {
                     GizmoAxis.X -> posDelta = Vec3(delta.x, 0f, 0f)
@@ -113,29 +174,27 @@ class GizmoController(
                     GizmoAxis.CENTER -> rotDelta = Vec3(delta.y * rotFactor, delta.x * rotFactor, 0f)
                     GizmoAxis.NONE -> {}
                 }
-                selectedNode.baseTransform = initT.copy(rotation = initT.rotation + rotDelta)
+                val rawRot = initT.rotation + rotDelta
+                val finalRot = if (selectedNode.type == SceneNodeType.CHARACTER_PART) {
+                    clampSkeletalRotation(selectedNode.characterPartType, rawRot)
+                } else {
+                    rawRot
+                }
+                selectedNode.baseTransform = initT.copy(rotation = finalRot)
                 selectedNode.animatedTransform = selectedNode.baseTransform.copyTransform()
             }
             EditorMode.SCALE -> {
-                var scaleDelta = Vec3.ZERO
-                when (activeAxis) {
-                    GizmoAxis.X -> scaleDelta = Vec3(delta.x, 0f, 0f)
-                    GizmoAxis.Y -> scaleDelta = Vec3(0f, delta.y, 0f)
-                    GizmoAxis.Z -> scaleDelta = Vec3(0f, 0f, delta.z)
-                    GizmoAxis.CENTER -> {
-                        val s = (delta.x + delta.y) * 0.5f
-                        scaleDelta = Vec3(s, s, s)
-                    }
-                    GizmoAxis.NONE -> {}
-                }
-                selectedNode.baseTransform = initT.copy(
-                    scale = Vec3(
-                        (initT.scale.x + scaleDelta.x).coerceAtLeast(0.05f),
-                        (initT.scale.y + scaleDelta.y).coerceAtLeast(0.05f),
-                        (initT.scale.z + scaleDelta.z).coerceAtLeast(0.05f)
-                    )
+                // Scaling can be done to entire body only
+                val targetNode = targetScaleNode ?: selectedNode
+                val s = (delta.x + delta.y + delta.z) * 0.5f
+                val uniformFactor = (1.0f + s).coerceAtLeast(0.1f)
+                val newScale = Vec3(
+                    (initT.scale.x * uniformFactor).coerceIn(0.1f, 10f),
+                    (initT.scale.y * uniformFactor).coerceIn(0.1f, 10f),
+                    (initT.scale.z * uniformFactor).coerceIn(0.1f, 10f)
                 )
-                selectedNode.animatedTransform = selectedNode.baseTransform.copyTransform()
+                targetNode.baseTransform = initT.copy(scale = newScale)
+                targetNode.animatedTransform = targetNode.baseTransform.copyTransform()
             }
             else -> {}
         }
@@ -144,15 +203,17 @@ class GizmoController(
 
     fun endDrag(selectedNode: SceneNode) {
         val initT = initialTransform
+        val targetNode = targetScaleNode ?: selectedNode
         if (initT != null && activeAxis != GizmoAxis.NONE) {
-            val newT = selectedNode.baseTransform.copyTransform()
+            val newT = targetNode.baseTransform.copyTransform()
             historyManager.executeCommand(
-                TransformCommand(sceneGraph, selectedNode.id, initT, newT)
+                TransformCommand(sceneGraph, targetNode.id, initT, newT)
             )
         }
         activeAxis = GizmoAxis.NONE
         initialTransform = null
         dragStartPlanePoint = null
+        targetScaleNode = null
     }
 
     private fun Ray.distanceToPoint(point: Vec3): Float {

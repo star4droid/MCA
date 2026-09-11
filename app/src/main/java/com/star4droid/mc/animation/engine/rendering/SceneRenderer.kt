@@ -49,8 +49,8 @@ class SceneRenderer(
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
         GLES20.glEnable(GLES20.GL_DEPTH_TEST)
         GLES20.glDepthFunc(GLES20.GL_LEQUAL)
-        GLES20.glEnable(GLES20.GL_BLEND)
-        GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA)
+        GLES20.glDepthMask(true)
+        GLES20.glDisable(GLES20.GL_BLEND)
 
         shader = Shader(Shader.VERTEX_SHADER_SRC, Shader.FRAGMENT_SHADER_SRC)
         cubeMesh = Geometry.createCubeMesh(1f, 1f, 1f)
@@ -147,6 +147,9 @@ class SceneRenderer(
     }
 
     private fun renderGrid(s: Shader, grid: Mesh, viewProj: FloatArray) {
+        GLES20.glEnable(GLES20.GL_BLEND)
+        GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA)
+
         Matrix.setIdentityM(modelMatrix, 0)
         Matrix.multiplyMM(mvpMatrix, 0, viewProj, 0, modelMatrix, 0)
 
@@ -158,6 +161,7 @@ class SceneRenderer(
 
         bindMesh(s, grid)
         GLES20.glDrawElements(GLES20.GL_LINES, grid.indexCount, GLES20.GL_UNSIGNED_SHORT, grid.indexBuffer)
+        GLES20.glDisable(GLES20.GL_BLEND)
     }
 
     private fun renderSceneNode(
@@ -200,8 +204,20 @@ class SceneRenderer(
                     GLES20.glUniform1f(s.uUseTexture, 0f)
                 }
 
+                val isTransparent = node.material.opacity < 0.98f || node.material.textureAssetId == "glass"
+                if (isTransparent) {
+                    GLES20.glEnable(GLES20.GL_BLEND)
+                    GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA)
+                } else {
+                    GLES20.glDisable(GLES20.GL_BLEND)
+                }
+
                 bindMesh(s, cube)
                 GLES20.glDrawElements(GLES20.GL_TRIANGLES, cube.indexCount, GLES20.GL_UNSIGNED_SHORT, cube.indexBuffer)
+
+                if (isTransparent) {
+                    GLES20.glDisable(GLES20.GL_BLEND)
+                }
             }
             SceneNodeType.CAMERA -> {
                 // Draw Camera indicator box

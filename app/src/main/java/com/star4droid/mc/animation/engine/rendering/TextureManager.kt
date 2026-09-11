@@ -16,8 +16,15 @@ class TextureManager {
     }
 
     private fun createTextureForId(textureId: String): Int {
-        val def = BuiltInAssets.getTextureDef(textureId)
-        val bitmap = BuiltInAssets.createProceduralBlockBitmap(def)
+        val bitmap = if (textureId.startsWith("steve") || textureId.startsWith("alex") ||
+            textureId.contains("_head") || textureId.contains("_body") ||
+            textureId.contains("_arm") || textureId.contains("_leg")
+        ) {
+            BuiltInAssets.createProceduralCharacterBitmap(textureId)
+        } else {
+            val def = BuiltInAssets.getTextureDef(textureId)
+            BuiltInAssets.createProceduralBlockBitmap(def)
+        }
         return uploadBitmap(bitmap)
     }
 

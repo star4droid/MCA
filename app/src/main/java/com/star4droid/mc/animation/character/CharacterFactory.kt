@@ -132,7 +132,7 @@ object CharacterFactory {
 
         // Right Leg (attached to root, center at y = 0.375)
         val rightLegNode = SceneNode(
-            id = rightArmId.replace("Arm", "Leg").let { UUID.randomUUID().toString() },
+            id = rightLegId,
             name = "$name Right Leg",
             type = SceneNodeType.CHARACTER_PART,
             parentId = rootId,

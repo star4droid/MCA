@@ -177,7 +177,38 @@ fun EditorScreen(
                     }
                 }
 
-                // Add Object Menu
+                // Quick Add Buttons
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color(0xFF1E293B))
+                        .padding(2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(Color(0xFF2563EB))
+                            .clickable { viewModel.addBlock() }
+                            .padding(horizontal = 7.dp, vertical = 4.dp)
+                    ) {
+                        Text("+ Block", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    }
+                    Spacer(modifier = Modifier.width(3.dp))
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(Color(0xFF16A34A))
+                            .clickable { viewModel.addCharacter(isAlex = false) }
+                            .padding(horizontal = 7.dp, vertical = 4.dp)
+                    ) {
+                        Text("+ Character", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(4.dp))
+
+                // Add Object Menu (More...)
                 Box {
                     IconButton(
                         onClick = { addMenuOpen = true },
@@ -191,16 +222,36 @@ fun EditorScreen(
                         modifier = Modifier.background(Color(0xFF1E293B))
                     ) {
                         DropdownMenuItem(
-                            text = { Text("🧱 Place Block", color = Color.White) },
-                            onClick = { addMenuOpen = false; viewModel.addBlock() }
+                            text = { Text("🧱 Add Block (Grass)", color = Color.White) },
+                            onClick = { addMenuOpen = false; viewModel.addBlock("grass") }
                         )
                         DropdownMenuItem(
-                            text = { Text("🧑 Add Steve Character", color = Color.White) },
-                            onClick = { addMenuOpen = false; viewModel.addCharacter(isAlex = false) }
+                            text = { Text("🪵 Add Block (Wood)", color = Color.White) },
+                            onClick = { addMenuOpen = false; viewModel.addBlock("wood") }
                         )
                         DropdownMenuItem(
-                            text = { Text("👩 Add Alex Character", color = Color.White) },
-                            onClick = { addMenuOpen = false; viewModel.addCharacter(isAlex = true) }
+                            text = { Text("💎 Add Block (Diamond)", color = Color.White) },
+                            onClick = { addMenuOpen = false; viewModel.addBlock("diamond_block") }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("🧑 Add Character (Steve)", color = Color.White) },
+                            onClick = { addMenuOpen = false; viewModel.addCharacter(false, "steve") }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("👩 Add Character (Alex)", color = Color.White) },
+                            onClick = { addMenuOpen = false; viewModel.addCharacter(true, "alex") }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("🧟 Add Character (Zombie)", color = Color.White) },
+                            onClick = { addMenuOpen = false; viewModel.addCharacter(false, "zombie") }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("🛡️ Add Character (Knight)", color = Color.White) },
+                            onClick = { addMenuOpen = false; viewModel.addCharacter(false, "knight") }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("⛏️ Add Character (Miner)", color = Color.White) },
+                            onClick = { addMenuOpen = false; viewModel.addCharacter(false, "miner") }
                         )
                         DropdownMenuItem(
                             text = { Text("🎥 Add Scene Camera", color = Color.White) },
@@ -383,7 +434,8 @@ fun EditorScreen(
                 onUpdateMaterial = { texId, op ->
                     uiState.selectedNodeId?.let { viewModel.updateNodeMaterial(it, texId, op) }
                 },
-                onClose = { viewModel.toggleInspector() }
+                onClose = { viewModel.toggleInspector() },
+                onSelectNode = { viewModel.selectNode(it) }
             )
         }
 
@@ -422,6 +474,9 @@ fun EditorScreen(
                 },
                 onAddBlockWithTexture = { texId ->
                     viewModel.addBlock(texId)
+                },
+                onAddCharacterWithSkin = { skinId ->
+                    viewModel.addCharacter(skinId == "alex", skinId)
                 }
             )
         }

@@ -54,11 +54,12 @@ import com.star4droid.mc.animation.assets.SoundPlayer
 fun AssetBrowserSheet(
     onDismiss: () -> Unit,
     onApplyTexture: (String) -> Unit,
-    onAddBlockWithTexture: (String) -> Unit
+    onAddBlockWithTexture: (String) -> Unit,
+    onAddCharacterWithSkin: (String) -> Unit = {}
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var selectedTab by remember { mutableStateOf(0) }
-    val tabs = listOf("Block Textures", "Characters", "Audio SFX")
+    val tabs = listOf("Blocks & Textures", "Characters & Skins", "Audio SFX")
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -78,7 +79,7 @@ fun AssetBrowserSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "Asset Browser",
+                    "Asset Browser & Spawn Menu",
                     fontWeight = FontWeight.Bold,
                     fontSize = 18.sp,
                     color = Color(0xFFF1F5F9)
@@ -121,27 +122,24 @@ fun AssetBrowserSheet(
 
             when (selectedTab) {
                 0 -> {
-                    // Block Textures
+                    // Block Textures & Spawning
                     LazyVerticalGrid(
-                        columns = GridCells.Adaptive(minSize = 90.dp),
+                        columns = GridCells.Adaptive(minSize = 120.dp),
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
-                        modifier = Modifier.height(300.dp)
+                        modifier = Modifier.height(320.dp)
                     ) {
                         items(BuiltInAssets.BLOCK_TEXTURES) { def ->
                             Column(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(8.dp))
                                     .background(Color(0xFF1E293B))
-                                    .clickable {
-                                        onApplyTexture(def.id)
-                                    }
                                     .padding(8.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 Box(
                                     modifier = Modifier
-                                        .size(44.dp)
+                                        .size(48.dp)
                                         .clip(RoundedCornerShape(6.dp))
                                         .background(Color(def.sideColor))
                                         .border(1.dp, Color(0xFF475569), RoundedCornerShape(6.dp))
@@ -149,11 +147,38 @@ fun AssetBrowserSheet(
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Text(
                                     def.displayName,
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Medium,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
                                     color = Color(0xFFE2E8F0),
                                     maxLines = 1
                                 )
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Button(
+                                        onClick = { onApplyTexture(def.id) },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF334155)),
+                                        shape = RoundedCornerShape(4.dp),
+                                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
+                                        modifier = Modifier.weight(1f).height(26.dp)
+                                    ) {
+                                        Text("Apply", fontSize = 9.sp, color = Color(0xFFE2E8F0))
+                                    }
+                                    Button(
+                                        onClick = {
+                                            onAddBlockWithTexture(def.id)
+                                            onDismiss()
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF22C55E)),
+                                        shape = RoundedCornerShape(4.dp),
+                                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
+                                        modifier = Modifier.weight(1f).height(26.dp)
+                                    ) {
+                                        Text("+ Add", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                    }
+                                }
                             }
                         }
                     }
@@ -169,7 +194,7 @@ fun AssetBrowserSheet(
                         Triple("Miner", "Deepslate Miner with Helmet", "miner")
                     )
                     Column(
-                        modifier = Modifier.height(300.dp),
+                        modifier = Modifier.height(320.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         for ((name, desc, skinId) in skins) {
@@ -178,29 +203,52 @@ fun AssetBrowserSheet(
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(8.dp))
                                     .background(Color(0xFF1E293B))
-                                    .padding(12.dp),
+                                    .padding(10.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text("🧑", fontSize = 24.sp)
-                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Text(
+                                        when (skinId) {
+                                            "alex" -> "👩"
+                                            "zombie" -> "🧟"
+                                            "knight" -> "🛡️"
+                                            "miner" -> "⛏️"
+                                            else -> "🧑"
+                                        },
+                                        fontSize = 24.sp
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
                                     Column {
-                                        Text(name, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color.White)
-                                        Text(desc, fontSize = 11.sp, color = Color(0xFF94A3B8))
+                                        Text(name, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.White)
+                                        Text(desc, fontSize = 10.sp, color = Color(0xFF94A3B8))
                                     }
                                 }
-                                Button(
-                                    onClick = {
-                                        onApplyTexture(skinId)
-                                        onDismiss()
-                                    },
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF22C55E)),
-                                    shape = RoundedCornerShape(6.dp),
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                                    modifier = Modifier.height(32.dp)
-                                ) {
-                                    Text("Select", fontSize = 11.sp)
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Button(
+                                        onClick = {
+                                            onApplyTexture(skinId)
+                                            onDismiss()
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF334155)),
+                                        shape = RoundedCornerShape(6.dp),
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                        modifier = Modifier.height(30.dp)
+                                    ) {
+                                        Text("Apply Skin", fontSize = 10.sp, color = Color(0xFF94A3B8))
+                                    }
+                                    Button(
+                                        onClick = {
+                                            onAddCharacterWithSkin(skinId)
+                                            onDismiss()
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF22C55E)),
+                                        shape = RoundedCornerShape(6.dp),
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                        modifier = Modifier.height(30.dp)
+                                    ) {
+                                        Text("+ Add Character", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                    }
                                 }
                             }
                         }

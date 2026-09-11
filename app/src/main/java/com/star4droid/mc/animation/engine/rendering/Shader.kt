@@ -116,18 +116,24 @@ class Shader(vertexSource: String, fragmentSource: String) {
                 vec4 baseColor = uObjectColor;
                 if (uUseTexture > 0.5) {
                     vec4 texColor = texture2D(uTexture, vTexCoord);
-                    baseColor = texColor * uObjectColor;
+                    baseColor = vec4(texColor.rgb * uObjectColor.rgb, texColor.a * uObjectColor.a);
                 }
 
-                // Diffuse lighting
-                float diff = max(dot(vNormal, normalize(uLightDir)), 0.0);
+                // Discard fully transparent pixels (e.g. cutouts)
+                if (baseColor.a < 0.05) {
+                    discard;
+                }
+
+                // Diffuse lighting with directional sun
+                vec3 norm = normalize(vNormal);
+                float diff = max(dot(norm, normalize(uLightDir)), 0.0);
                 vec3 lighting = uAmbientColor + uLightColor * diff;
 
                 vec3 finalRgb = baseColor.rgb * lighting;
 
                 // Selection highlight tint
                 if (uIsSelected > 0.5) {
-                    finalRgb = mix(finalRgb, uSelectionColor.rgb, 0.35);
+                    finalRgb = mix(finalRgb, uSelectionColor.rgb, 0.4);
                 }
 
                 gl_FragColor = vec4(finalRgb, baseColor.a);

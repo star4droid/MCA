@@ -55,6 +55,42 @@ import com.star4droid.mc.animation.engine.scene.SceneNodeType
 import com.star4droid.mc.animation.engine.scene.TimeOfDay
 import com.star4droid.mc.animation.engine.scene.Transform
 
+fun clampRotationForPart(partType: com.star4droid.mc.animation.engine.scene.CharacterPartType?, axis: Int, value: Float): Float {
+    return when (partType) {
+        com.star4droid.mc.animation.engine.scene.CharacterPartType.HEAD -> when (axis) {
+            0 -> value.coerceIn(-60f, 50f)
+            1 -> value.coerceIn(-85f, 85f)
+            else -> value.coerceIn(-35f, 35f)
+        }
+        com.star4droid.mc.animation.engine.scene.CharacterPartType.RIGHT_ARM -> when (axis) {
+            0 -> value.coerceIn(-180f, 90f)
+            1 -> value.coerceIn(-45f, 45f)
+            else -> value.coerceIn(-135f, 15f)
+        }
+        com.star4droid.mc.animation.engine.scene.CharacterPartType.LEFT_ARM -> when (axis) {
+            0 -> value.coerceIn(-180f, 90f)
+            1 -> value.coerceIn(-45f, 45f)
+            else -> value.coerceIn(-15f, 135f)
+        }
+        com.star4droid.mc.animation.engine.scene.CharacterPartType.RIGHT_LEG -> when (axis) {
+            0 -> value.coerceIn(-85f, 80f)
+            1 -> value.coerceIn(-25f, 25f)
+            else -> value.coerceIn(-30f, 20f)
+        }
+        com.star4droid.mc.animation.engine.scene.CharacterPartType.LEFT_LEG -> when (axis) {
+            0 -> value.coerceIn(-85f, 80f)
+            1 -> value.coerceIn(-25f, 25f)
+            else -> value.coerceIn(-20f, 30f)
+        }
+        com.star4droid.mc.animation.engine.scene.CharacterPartType.BODY -> when (axis) {
+            0 -> value.coerceIn(-35f, 35f)
+            1 -> value.coerceIn(-45f, 45f)
+            else -> value.coerceIn(-25f, 25f)
+        }
+        else -> value
+    }
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun InspectorPanel(
@@ -65,6 +101,7 @@ fun InspectorPanel(
     onApplyPreset: (PresetType) -> Unit,
     onUpdateMaterial: (textureAssetId: String, opacity: Float) -> Unit,
     onClose: () -> Unit,
+    onSelectNode: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
@@ -150,50 +187,85 @@ fun InspectorPanel(
 
             val t = node.animatedTransform
 
-            // Position
-            TransformChannelGroup(
-                title = "Position",
-                values = listOf(t.position.x, t.position.y, t.position.z),
-                labels = listOf("X", "Y", "Z"),
-                colors = listOf(Color(0xFFEF4444), Color(0xFF22C55E), Color(0xFF3B82F6)),
-                step = 0.5f,
-                onValueChange = { idx, newVal ->
-                    val newPos = when (idx) {
-                        0 -> t.position.copy(x = newVal)
-                        1 -> t.position.copy(y = newVal)
-                        else -> t.position.copy(z = newVal)
+            // Position: If CHARACTER_PART, position is anchored to joint socket!
+            if (node.type == SceneNodeType.CHARACTER_PART) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color(0xFF0F172A))
+                        .padding(8.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("🔒", fontSize = 12.sp)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Anchored to Skeleton Joint", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF94A3B8))
                     }
-                    onUpdateTransform(t.copy(position = newPos))
-                },
-                onKeyframe = { idx ->
-                    val path = when (idx) {
-                        0 -> "transform.position.x"
-                        1 -> "transform.position.y"
-                        else -> "transform.position.z"
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text("Limb is anchored to socket. Move character root to reposition in scene.", fontSize = 10.sp, color = Color(0xFF64748B))
+                    if (node.parentId != null) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Button(
+                            onClick = { onSelectNode(node.parentId!!) },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF334155)),
+                            shape = RoundedCornerShape(4.dp),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                            modifier = Modifier.height(26.dp)
+                        ) {
+                            Text("Select Character Root", fontSize = 10.sp, color = Color(0xFF38BDF8))
+                        }
                     }
-                    val v = when (idx) {
-                        0 -> t.position.x
-                        1 -> t.position.y
-                        else -> t.position.z
-                    }
-                    onAddKeyframe(path, v)
                 }
-            )
+            } else {
+                TransformChannelGroup(
+                    title = "Position",
+                    values = listOf(t.position.x, t.position.y, t.position.z),
+                    labels = listOf("X", "Y", "Z"),
+                    colors = listOf(Color(0xFFEF4444), Color(0xFF22C55E), Color(0xFF3B82F6)),
+                    step = 0.5f,
+                    onValueChange = { idx, newVal ->
+                        val newPos = when (idx) {
+                            0 -> t.position.copy(x = newVal)
+                            1 -> t.position.copy(y = newVal)
+                            else -> t.position.copy(z = newVal)
+                        }
+                        onUpdateTransform(t.copy(position = newPos))
+                    },
+                    onKeyframe = { idx ->
+                        val path = when (idx) {
+                            0 -> "transform.position.x"
+                            1 -> "transform.position.y"
+                            else -> "transform.position.z"
+                        }
+                        val v = when (idx) {
+                            0 -> t.position.x
+                            1 -> t.position.y
+                            else -> t.position.z
+                        }
+                        onAddKeyframe(path, v)
+                    }
+                )
+            }
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Rotation
+            // Rotation (with skeletal limits if CHARACTER_PART)
             TransformChannelGroup(
-                title = "Rotation",
+                title = if (node.type == SceneNodeType.CHARACTER_PART) "Rotation (Skeletal Limits)" else "Rotation",
                 values = listOf(t.rotation.x, t.rotation.y, t.rotation.z),
                 labels = listOf("X", "Y", "Z"),
                 colors = listOf(Color(0xFFEF4444), Color(0xFF22C55E), Color(0xFF3B82F6)),
                 step = 15f,
                 onValueChange = { idx, newVal ->
+                    val clampedVal = if (node.type == SceneNodeType.CHARACTER_PART) {
+                        clampRotationForPart(node.characterPartType, idx, newVal)
+                    } else {
+                        newVal
+                    }
                     val newRot = when (idx) {
-                        0 -> t.rotation.copy(x = newVal)
-                        1 -> t.rotation.copy(y = newVal)
-                        else -> t.rotation.copy(z = newVal)
+                        0 -> t.rotation.copy(x = clampedVal)
+                        1 -> t.rotation.copy(y = clampedVal)
+                        else -> t.rotation.copy(z = clampedVal)
                     }
                     onUpdateTransform(t.copy(rotation = newRot))
                 },
@@ -214,35 +286,71 @@ fun InspectorPanel(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Scale
-            TransformChannelGroup(
-                title = "Scale",
-                values = listOf(t.scale.x, t.scale.y, t.scale.z),
-                labels = listOf("X", "Y", "Z"),
-                colors = listOf(Color(0xFFEF4444), Color(0xFF22C55E), Color(0xFF3B82F6)),
-                step = 0.2f,
-                onValueChange = { idx, newVal ->
-                    val newScale = when (idx) {
-                        0 -> t.scale.copy(x = newVal.coerceAtLeast(0.05f))
-                        1 -> t.scale.copy(y = newVal.coerceAtLeast(0.05f))
-                        else -> t.scale.copy(z = newVal.coerceAtLeast(0.05f))
+            // Scale: If CHARACTER_PART, individual scale is locked; scaling applies to entire body only!
+            if (node.type == SceneNodeType.CHARACTER_PART) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color(0xFF0F172A))
+                        .padding(8.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("🔒", fontSize = 12.sp)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Scale Entire Body Only", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF94A3B8))
                     }
-                    onUpdateTransform(t.copy(scale = newScale))
-                },
-                onKeyframe = { idx ->
-                    val path = when (idx) {
-                        0 -> "transform.scale.x"
-                        1 -> "transform.scale.y"
-                        else -> "transform.scale.z"
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text("Individual limb scaling is locked. Scale the character root to resize the entire body.", fontSize = 10.sp, color = Color(0xFF64748B))
+                    if (node.parentId != null) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Button(
+                            onClick = { onSelectNode(node.parentId!!) },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF334155)),
+                            shape = RoundedCornerShape(4.dp),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                            modifier = Modifier.height(26.dp)
+                        ) {
+                            Text("Select Character to Scale", fontSize = 10.sp, color = Color(0xFF38BDF8))
+                        }
                     }
-                    val v = when (idx) {
-                        0 -> t.scale.x
-                        1 -> t.scale.y
-                        else -> t.scale.z
-                    }
-                    onAddKeyframe(path, v)
                 }
-            )
+            } else {
+                TransformChannelGroup(
+                    title = if (node.type == SceneNodeType.CHARACTER_ROOT) "Scale (Entire Character)" else "Scale",
+                    values = listOf(t.scale.x, t.scale.y, t.scale.z),
+                    labels = listOf("X", "Y", "Z"),
+                    colors = listOf(Color(0xFFEF4444), Color(0xFF22C55E), Color(0xFF3B82F6)),
+                    step = 0.2f,
+                    onValueChange = { idx, newVal ->
+                        val coerced = newVal.coerceAtLeast(0.05f)
+                        val newScale = if (node.type == SceneNodeType.CHARACTER_ROOT) {
+                            // Uniform scale for entire character
+                            Vec3(coerced, coerced, coerced)
+                        } else {
+                            when (idx) {
+                                0 -> t.scale.copy(x = coerced)
+                                1 -> t.scale.copy(y = coerced)
+                                else -> t.scale.copy(z = coerced)
+                            }
+                        }
+                        onUpdateTransform(t.copy(scale = newScale))
+                    },
+                    onKeyframe = { idx ->
+                        val path = when (idx) {
+                            0 -> "transform.scale.x"
+                            1 -> "transform.scale.y"
+                            else -> "transform.scale.z"
+                        }
+                        val v = when (idx) {
+                            0 -> t.scale.x
+                            1 -> t.scale.y
+                            else -> t.scale.z
+                        }
+                        onAddKeyframe(path, v)
+                    }
+                )
+            }
 
             Spacer(modifier = Modifier.height(14.dp))
 

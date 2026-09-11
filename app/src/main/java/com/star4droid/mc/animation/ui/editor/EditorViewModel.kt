@@ -318,9 +318,14 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         updateHistoryState()
     }
 
-    fun addCharacter(isAlex: Boolean = false) {
-        val name = if (isAlex) "Alex" else "Steve"
-        val skinId = if (isAlex) "alex" else "steve"
+    fun addCharacter(isAlex: Boolean = false, skinId: String = if (isAlex) "alex" else "steve") {
+        val name = when (skinId) {
+            "alex" -> "Alex"
+            "zombie" -> "Zombie"
+            "knight" -> "Knight"
+            "miner" -> "Miner"
+            else -> "Steve"
+        }
         val rootId = CharacterFactory.addCharacterToScene(
             sceneGraph = sceneGraph,
             name = "$name ${sceneGraph.nodes.count { it.value.characterPartType == com.star4droid.mc.animation.engine.scene.CharacterPartType.ROOT } + 1}",
