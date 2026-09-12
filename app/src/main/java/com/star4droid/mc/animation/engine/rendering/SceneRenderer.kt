@@ -132,7 +132,15 @@ class SceneRenderer(
             else -> floatArrayOf(0.35f, 0.35f, 0.38f)
         }
 
-        GLES20.glUniform3fv(s.uLightDir, 1, sunDir, 0)
+        val sunNode = sceneGraph.getAllNodes().firstOrNull { it.type == SceneNodeType.LIGHT && it.visible && (it.lightData?.lightType == com.star4droid.mc.animation.engine.scene.LightType.SUN) }
+        val finalSunDir = if (sunNode != null) {
+            val forward = (sunNode.worldMatrix.transformPoint(Vec3(0f, 0f, -1f)) - sunNode.getWorldPosition()).normalized()
+            floatArrayOf(-forward.x, -forward.y, -forward.z)
+        } else {
+            sunDir
+        }
+
+        GLES20.glUniform3fv(s.uLightDir, 1, finalSunDir, 0)
         GLES20.glUniform3fv(s.uLightColor, 1, sunColor, 0)
         GLES20.glUniform3fv(s.uAmbientColor, 1, ambientColor, 0)
         GLES20.glUniform4f(s.uSelectionColor, 0.2f, 0.8f, 1.0f, 1.0f)
@@ -380,6 +388,12 @@ class SceneRenderer(
                 drawMeshWithMatrix(s, cube, ray1Mat, viewProj, isSelected, 1.0f, 0.8f, 0.1f)
                 val ray2Mat = nodeWorld * Mat4.scaling(0.08f, 0.55f, 0.08f)
                 drawMeshWithMatrix(s, cube, ray2Mat, viewProj, isSelected, 1.0f, 0.8f, 0.1f)
+
+                // Direction Line (Forward ray indicator)
+                if (lightData.showHelperLines || isSelected) {
+                    val dirRayMat = nodeWorld * Mat4.translation(Vec3(0f, 0f, -2.5f)) * Mat4.scaling(0.04f, 0.04f, 5.0f)
+                    drawMeshWithMatrix(s, cube, dirRayMat, viewProj, isSelected, 1.0f, 0.9f, 0.3f)
+                }
             }
             com.star4droid.mc.animation.engine.scene.LightType.POINT -> {
                 // Point Light Icon: Glowing sphere bulb + base ring
@@ -388,6 +402,24 @@ class SceneRenderer(
 
                 val baseMat = nodeWorld * Mat4.translation(Vec3(0f, -0.18f, 0f)) * Mat4.scaling(0.12f, 0.12f, 0.12f)
                 drawMeshWithMatrix(s, cube, baseMat, viewProj, isSelected, 0.3f, 0.3f, 0.35f)
+
+                // Range Wireframe Box Indicator
+                if ((lightData.showHelperLines || isSelected) && wireframeMesh != null) {
+                    val rSpan = lightData.range * 0.5f
+                    val rangeMat = nodeWorld * Mat4.scaling(rSpan, rSpan, rSpan)
+                    System.arraycopy(rangeMat.values, 0, modelMatrix, 0, 16)
+                    Matrix.multiplyMM(mvpMatrix, 0, viewProj, 0, modelMatrix, 0)
+
+                    GLES20.glUniformMatrix4fv(s.uMVPMatrix, 1, false, mvpMatrix, 0)
+                    GLES20.glUniformMatrix4fv(s.uModelMatrix, 1, false, modelMatrix, 0)
+                    GLES20.glUniform4f(s.uObjectColor, r, g, b, 0.6f)
+                    GLES20.glUniform1f(s.uIsSelected, if (isSelected) 1f else 0f)
+                    GLES20.glUniform1f(s.uUseTexture, 0f)
+
+                    bindMesh(s, wireframeMesh!!)
+                    GLES20.glLineWidth(1.5f)
+                    GLES20.glDrawElements(GLES20.GL_LINES, wireframeMesh!!.indexCount, GLES20.GL_UNSIGNED_SHORT, wireframeMesh!!.indexBuffer)
+                }
             }
             com.star4droid.mc.animation.engine.scene.LightType.SPOT -> {
                 // Spot Light Icon: Spotlight housing + front lens glowing cone
@@ -396,6 +428,29 @@ class SceneRenderer(
 
                 val lensMat = nodeWorld * Mat4.translation(Vec3(0f, 0f, -0.22f)) * Mat4.scaling(0.28f, 0.28f, 0.06f)
                 drawMeshWithMatrix(s, cube, lensMat, viewProj, isSelected, r, g, b)
+
+                // Spot Cone Direction & Range Frustum
+                if (lightData.showHelperLines || isSelected) {
+                    val beamLen = lightData.range * 0.4f
+                    val dirRayMat = nodeWorld * Mat4.translation(Vec3(0f, 0f, -beamLen * 0.5f)) * Mat4.scaling(0.04f, 0.04f, beamLen)
+                    drawMeshWithMatrix(s, cube, dirRayMat, viewProj, isSelected, r, g, b)
+
+                    if (cameraFrustumMesh != null) {
+                        val frustumMat = nodeWorld * Mat4.translation(Vec3(0f, 0f, -beamLen)) * Mat4.scaling(lightData.coneAngle / 45f, lightData.coneAngle / 45f, 1f)
+                        System.arraycopy(frustumMat.values, 0, modelMatrix, 0, 16)
+                        Matrix.multiplyMM(mvpMatrix, 0, viewProj, 0, modelMatrix, 0)
+
+                        GLES20.glUniformMatrix4fv(s.uMVPMatrix, 1, false, mvpMatrix, 0)
+                        GLES20.glUniformMatrix4fv(s.uModelMatrix, 1, false, modelMatrix, 0)
+                        GLES20.glUniform4f(s.uObjectColor, r, g, b, 0.75f)
+                        GLES20.glUniform1f(s.uIsSelected, if (isSelected) 1f else 0f)
+                        GLES20.glUniform1f(s.uUseTexture, 0f)
+
+                        bindMesh(s, cameraFrustumMesh!!)
+                        GLES20.glLineWidth(2.0f)
+                        GLES20.glDrawElements(GLES20.GL_LINES, cameraFrustumMesh!!.indexCount, GLES20.GL_UNSIGNED_SHORT, cameraFrustumMesh!!.indexBuffer)
+                    }
+                }
             }
         }
     }

@@ -46,8 +46,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.asImageBitmap
 import com.star4droid.mc.animation.assets.BuiltInAssets
 import com.star4droid.mc.animation.assets.SoundPlayer
+
+data class TextureItemData(
+    val id: String,
+    val displayName: String,
+    val color: Int,
+    val customBitmap: android.graphics.Bitmap? = null
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -55,6 +64,7 @@ fun AssetBrowserSheet(
     onDismiss: () -> Unit,
     onApplyTexture: (String) -> Unit,
     onAddBlockWithTexture: (String) -> Unit,
+    onAddPlaneWithTexture: ((String) -> Unit)? = null,
     onAddCharacterWithSkin: (String) -> Unit = {}
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -122,14 +132,25 @@ fun AssetBrowserSheet(
 
             when (selectedTab) {
                 0 -> {
-                    // Block Textures & Spawning
+                    // Block Textures & Spawning (Built-in + Custom Imported)
+                    val allTextureItems = remember(BuiltInAssets.customBitmaps.size) {
+                        val items = mutableListOf<TextureItemData>()
+                        BuiltInAssets.customBitmaps.forEach { (customId, bmp) ->
+                            items.add(TextureItemData(customId, customId, 0xFF0F172A.toInt(), bmp))
+                        }
+                        BuiltInAssets.BLOCK_TEXTURES.forEach { def ->
+                            items.add(TextureItemData(def.id, def.displayName, def.sideColor, null))
+                        }
+                        items
+                    }
+
                     LazyVerticalGrid(
-                        columns = GridCells.Adaptive(minSize = 120.dp),
+                        columns = GridCells.Adaptive(minSize = 130.dp),
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
-                        modifier = Modifier.height(320.dp)
+                        modifier = Modifier.height(340.dp)
                     ) {
-                        items(BuiltInAssets.BLOCK_TEXTURES) { def ->
+                        items(allTextureItems) { item ->
                             Column(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(8.dp))
@@ -141,12 +162,21 @@ fun AssetBrowserSheet(
                                     modifier = Modifier
                                         .size(48.dp)
                                         .clip(RoundedCornerShape(6.dp))
-                                        .background(Color(def.sideColor))
-                                        .border(1.dp, Color(0xFF475569), RoundedCornerShape(6.dp))
-                                )
+                                        .background(Color(item.color))
+                                        .border(1.dp, Color(0xFF475569), RoundedCornerShape(6.dp)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (item.customBitmap != null) {
+                                        Image(
+                                            bitmap = item.customBitmap.asImageBitmap(),
+                                            contentDescription = item.displayName,
+                                            modifier = Modifier.fillMaxSize()
+                                        )
+                                    }
+                                }
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Text(
-                                    def.displayName,
+                                    item.displayName,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = Color(0xFFE2E8F0),
@@ -158,25 +188,39 @@ fun AssetBrowserSheet(
                                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
                                     Button(
-                                        onClick = { onApplyTexture(def.id) },
+                                        onClick = { onApplyTexture(item.id) },
                                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF334155)),
                                         shape = RoundedCornerShape(4.dp),
-                                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
+                                        contentPadding = PaddingValues(horizontal = 2.dp, vertical = 2.dp),
                                         modifier = Modifier.weight(1f).height(26.dp)
                                     ) {
-                                        Text("Apply", fontSize = 9.sp, color = Color(0xFFE2E8F0))
+                                        Text("Apply", fontSize = 8.sp, color = Color(0xFFE2E8F0))
                                     }
                                     Button(
                                         onClick = {
-                                            onAddBlockWithTexture(def.id)
+                                            onAddBlockWithTexture(item.id)
                                             onDismiss()
                                         },
                                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF22C55E)),
                                         shape = RoundedCornerShape(4.dp),
-                                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
+                                        contentPadding = PaddingValues(horizontal = 2.dp, vertical = 2.dp),
                                         modifier = Modifier.weight(1f).height(26.dp)
                                     ) {
-                                        Text("+ Add", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                        Text("+Block", fontSize = 8.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                    }
+                                    if (onAddPlaneWithTexture != null) {
+                                        Button(
+                                            onClick = {
+                                                onAddPlaneWithTexture(item.id)
+                                                onDismiss()
+                                            },
+                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF38BDF8)),
+                                            shape = RoundedCornerShape(4.dp),
+                                            contentPadding = PaddingValues(horizontal = 2.dp, vertical = 2.dp),
+                                            modifier = Modifier.weight(1f).height(26.dp)
+                                        ) {
+                                            Text("+Plane", fontSize = 8.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                        }
                                     }
                                 }
                             }

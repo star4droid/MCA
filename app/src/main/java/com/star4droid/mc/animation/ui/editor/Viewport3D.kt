@@ -284,35 +284,32 @@ class EditorGLSurfaceView(
                             }
                             WorldBuildingTool.ADD -> {
                                 if (closestNode != null) {
-                                    // Place adjacent to clicked face (accounting for block scale & dimensions)
+                                    // Place adjacent to clicked face using precise AABB bounds
+                                    val (minB, maxB) = closestNode.getWorldAABB()
+                                    val boxCenter = (minB + maxB) * 0.5f
+                                    val boxExtents = maxB - minB
                                     val hitPoint = ray.origin + ray.direction * closestDist
-                                    val center = closestNode.getWorldPosition()
-                                    val rel = hitPoint - center
-                                    val extentX = closestNode.boxDimensions.x * closestNode.animatedTransform.scale.x
-                                    val extentY = closestNode.boxDimensions.y * closestNode.animatedTransform.scale.y
-                                    val extentZ = closestNode.boxDimensions.z * closestNode.animatedTransform.scale.z
+                                    val rel = hitPoint - boxCenter
 
-                                    val normRelX = if (extentX > 0f) rel.x / (extentX * 0.5f) else rel.x
-                                    val normRelY = if (extentY > 0f) rel.y / (extentY * 0.5f) else rel.y
-                                    val normRelZ = if (extentZ > 0f) rel.z / (extentZ * 0.5f) else rel.z
+                                    val normRelX = if (boxExtents.x > 0f) rel.x / (boxExtents.x * 0.5f) else 0f
+                                    val normRelY = if (boxExtents.y > 0f) rel.y / (boxExtents.y * 0.5f) else 0f
+                                    val normRelZ = if (boxExtents.z > 0f) rel.z / (boxExtents.z * 0.5f) else 0f
+
+                                    val absX = abs(normRelX)
+                                    val absY = abs(normRelY)
+                                    val absZ = abs(normRelZ)
 
                                     val normal = when {
-                                        abs(normRelY) >= abs(normRelX) && abs(normRelY) >= abs(normRelZ) ->
-                                            Vec3(0f, if (normRelY > 0) 1f else -1f, 0f)
-                                        abs(normRelX) >= abs(normRelZ) ->
-                                            Vec3(if (normRelX > 0) 1f else -1f, 0f, 0f)
-                                        else ->
-                                            Vec3(0f, 0f, if (normRelZ > 0) 1f else -1f)
+                                        absY >= absX && absY >= absZ -> Vec3(0f, if (normRelY > 0) 1f else -1f, 0f)
+                                        absX >= absZ -> Vec3(if (normRelX > 0) 1f else -1f, 0f, 0f)
+                                        else -> Vec3(0f, 0f, if (normRelZ > 0) 1f else -1f)
                                     }
-                                    val offset = Vec3(
-                                        normal.x * (extentX * 0.5f + 0.5f),
-                                        normal.y * (extentY * 0.5f + 0.5f),
-                                        normal.z * (extentZ * 0.5f + 0.5f)
-                                    )
+
+                                    val targetPoint = hitPoint + normal * 0.5f
                                     val placePos = Vec3(
-                                        Math.round(center.x + offset.x).toFloat(),
-                                        Math.round(center.y + offset.y).toFloat().coerceAtLeast(0f),
-                                        Math.round(center.z + offset.z).toFloat()
+                                        Math.round(targetPoint.x).toFloat(),
+                                        Math.round(targetPoint.y).toFloat().coerceAtLeast(0f),
+                                        Math.round(targetPoint.z).toFloat()
                                     )
                                     viewModel.addBlockAt(placePos)
                                 } else {

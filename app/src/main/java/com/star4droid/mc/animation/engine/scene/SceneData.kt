@@ -58,6 +58,7 @@ data class LightData(
     val range: Float = 15.0f,
     val coneAngle: Float = 45.0f,
     val timeOfDay: TimeOfDay = TimeOfDay.NOON,
-    val shadows: Boolean = true
+    val shadows: Boolean = true,
+    val showHelperLines: Boolean = false
 )
 

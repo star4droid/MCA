@@ -10,7 +10,7 @@ plugins {
 }
 
 android {
-  namespace = "com.example"
+  namespace = "com.star4droid.mc.animation"
   compileSdk = 36
 
   lint {

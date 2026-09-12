@@ -30,12 +30,16 @@ data class SceneNode(
      * for raycast selection and bounds inspection.
      */
     fun getWorldAABB(): Pair<Vec3, Vec3> {
-        val half = Vec3(
-            boxDimensions.x * animatedTransform.scale.x * 0.5f,
-            boxDimensions.y * animatedTransform.scale.y * 0.5f,
-            boxDimensions.z * animatedTransform.scale.z * 0.5f
-        )
         val pos = getWorldPosition()
+        val scaleX = Vec3(worldMatrix[0], worldMatrix[1], worldMatrix[2]).length()
+        val scaleY = Vec3(worldMatrix[4], worldMatrix[5], worldMatrix[6]).length()
+        val scaleZ = Vec3(worldMatrix[8], worldMatrix[9], worldMatrix[10]).length()
+
+        val half = Vec3(
+            (boxDimensions.x * scaleX * 0.5f).coerceAtLeast(0.1f),
+            (boxDimensions.y * scaleY * 0.5f).coerceAtLeast(0.1f),
+            (boxDimensions.z * scaleZ * 0.5f).coerceAtLeast(0.1f)
+        )
         return Pair(pos - half, pos + half)
     }
 

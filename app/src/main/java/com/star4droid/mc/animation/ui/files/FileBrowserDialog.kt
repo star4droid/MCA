@@ -10,6 +10,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -115,16 +117,48 @@ fun FileBrowserDialog(
         isPlayingAudio = null
     }
 
-    // Generic file importer
+    // Query original display name from ContentResolver
+    fun queryOriginalFileName(context: Context, uri: Uri): String {
+        var result: String? = null
+        if (uri.scheme == "content") {
+            try {
+                context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        val idx = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                        if (idx >= 0) {
+                            result = cursor.getString(idx)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+        if (result == null) {
+            val path = uri.path
+            val cut = path?.lastIndexOf('/') ?: -1
+            if (cut != -1) {
+                result = path?.substring(cut + 1)
+            }
+        }
+        return result?.ifEmpty { null } ?: "imported_${System.currentTimeMillis()}"
+    }
+
+    var fileToRename by remember { mutableStateOf<File?>(null) }
+
+    // Generic file importer preserving original filename & extension
     val fileImporter = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         if (uri != null) {
             try {
                 val mime = context.contentResolver.getType(uri) ?: ""
+                val originalName = queryOriginalFileName(context, uri)
+                val lowerName = originalName.lowercase()
                 val targetDir = when {
-                    mime.startsWith("audio/") -> soundsDir
-                    mime.startsWith("image/") -> texturesDir
+                    mime.startsWith("audio/") || lowerName.endsWith(".mp3") || lowerName.endsWith(".wav") || lowerName.endsWith(".ogg") -> soundsDir
+                    mime.startsWith("image/") || lowerName.endsWith(".png") || lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg") || lowerName.endsWith(".webp") -> texturesDir
+                    lowerName.endsWith(".obj") || lowerName.endsWith(".mtl") || lowerName.endsWith(".json") -> modelsDir
                     else -> when (currentCategory) {
                         FileCategory.SOUNDS -> soundsDir
                         FileCategory.IMAGES -> texturesDir
@@ -133,17 +167,13 @@ fun FileBrowserDialog(
                     }
                 }
 
-                val ext = when {
-                    mime.contains("png") -> "png"
-                    mime.contains("jpeg") || mime.contains("jpg") -> "jpg"
-                    mime.contains("mp3") -> "mp3"
-                    mime.contains("wav") -> "wav"
-                    mime.contains("ogg") -> "ogg"
-                    else -> "dat"
+                var destFile = File(targetDir, originalName)
+                if (destFile.exists()) {
+                    val base = originalName.substringBeforeLast(".")
+                    val ext = originalName.substringAfterLast(".", "")
+                    val extStr = if (ext.isNotEmpty()) ".$ext" else ""
+                    destFile = File(targetDir, "${base}_${System.currentTimeMillis() % 10000}$extStr")
                 }
-
-                val fileName = "custom_${System.currentTimeMillis()}.$ext"
-                val destFile = File(targetDir, fileName)
 
                 context.contentResolver.openInputStream(uri)?.use { input ->
                     FileOutputStream(destFile).use { output ->
@@ -154,7 +184,7 @@ fun FileBrowserDialog(
                 if (destFile.extension.lowercase() in listOf("png", "jpg", "jpeg", "webp")) {
                     val bitmap = BitmapFactory.decodeFile(destFile.absolutePath)
                     if (bitmap != null) {
-                        val textureId = "custom_${destFile.nameWithoutExtension}"
+                        val textureId = destFile.nameWithoutExtension
                         BuiltInAssets.registerCustomTexture(textureId, bitmap)
                         onTextureImported(textureId)
                     }
@@ -218,27 +248,27 @@ fun FileBrowserDialog(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // Category Filter Tabs
+                // Scrollable Category Filter Tabs
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     FileCategory.values().forEach { cat ->
                         val isSelected = currentCategory == cat
                         Surface(
                             onClick = { currentCategory = cat },
                             shape = RoundedCornerShape(6.dp),
-                            color = if (isSelected) Color(0xFF2563EB) else Color(0xFF334155),
-                            modifier = Modifier.weight(1f)
+                            color = if (isSelected) Color(0xFF2563EB) else Color(0xFF334155)
                         ) {
                             Text(
                                 text = cat.label,
-                                fontSize = 10.sp,
+                                fontSize = 11.sp,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                                 color = if (isSelected) Color.White else Color(0xFFCBD5E1),
                                 maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.padding(vertical = 6.dp, horizontal = 2.dp),
+                                modifier = Modifier.padding(vertical = 6.dp, horizontal = 12.dp),
                                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
                             )
                         }
@@ -334,6 +364,7 @@ fun FileBrowserDialog(
                             val isSelected = selectedFile == file
                             val isImage = file.extension.lowercase() in listOf("png", "jpg", "jpeg", "webp")
                             val isAudio = file.extension.lowercase() in listOf("mp3", "wav", "ogg", "m4a")
+                            val isModel = file.extension.lowercase() in listOf("obj", "json", "bbmodel", "gltf")
                             val isPlayingThis = isPlayingAudio == file.absolutePath
 
                             Card(
@@ -343,7 +374,13 @@ fun FileBrowserDialog(
                                 shape = RoundedCornerShape(8.dp),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { selectedFile = file }
+                                    .clickable {
+                                        selectedFile = file
+                                        if (isModel) {
+                                            onFileSelected(file)
+                                            onDismiss()
+                                        }
+                                    }
                                     .border(
                                         width = if (isSelected) 1.5.dp else 0.dp,
                                         color = if (isSelected) Color(0xFF38BDF8) else Color.Transparent,
@@ -392,7 +429,7 @@ fun FileBrowserDialog(
                                         Icon(
                                             Icons.Default.InsertDriveFile,
                                             contentDescription = null,
-                                            tint = Color(0xFF38BDF8),
+                                            tint = if (isModel) Color(0xFF10B981) else Color(0xFF38BDF8),
                                             modifier = Modifier.size(40.dp)
                                         )
                                     }
@@ -418,25 +455,37 @@ fun FileBrowserDialog(
                                     Spacer(modifier = Modifier.width(6.dp))
 
                                     Row(verticalAlignment = Alignment.CenterVertically) {
-                                        if (isImage) {
+                                        if (isImage || isModel) {
                                             Button(
                                                 onClick = {
                                                     onFileSelected(file)
-                                                    val bitmap = try { BitmapFactory.decodeFile(file.path) } catch (e: Exception) { null }
-                                                    if (bitmap != null) {
-                                                        val textureId = "custom_${file.nameWithoutExtension}"
-                                                        BuiltInAssets.registerCustomTexture(textureId, bitmap)
-                                                        onTextureImported(textureId)
+                                                    if (isImage) {
+                                                        val bitmap = try { BitmapFactory.decodeFile(file.path) } catch (e: Exception) { null }
+                                                        if (bitmap != null) {
+                                                            val textureId = file.nameWithoutExtension
+                                                            BuiltInAssets.registerCustomTexture(textureId, bitmap)
+                                                            onTextureImported(textureId)
+                                                        }
                                                     }
                                                     onDismiss()
                                                 },
-                                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+                                                colors = ButtonDefaults.buttonColors(containerColor = if (isModel) Color(0xFF10B981) else Color(0xFF2563EB)),
                                                 shape = RoundedCornerShape(6.dp),
                                                 modifier = Modifier.height(28.dp),
                                                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                                             ) {
-                                                Text("Apply", fontSize = 10.sp)
+                                                Text(if (isModel) "Import Model" else "Apply", fontSize = 10.sp, fontWeight = FontWeight.Bold)
                                             }
+                                        }
+
+                                        Spacer(modifier = Modifier.width(4.dp))
+
+                                        // Rename Icon
+                                        IconButton(
+                                            onClick = { fileToRename = file },
+                                            modifier = Modifier.size(28.dp)
+                                        ) {
+                                            Icon(Icons.Default.Edit, contentDescription = "Rename", tint = Color(0xFF38BDF8), modifier = Modifier.size(16.dp))
                                         }
 
                                         Spacer(modifier = Modifier.width(4.dp))
@@ -458,5 +507,55 @@ fun FileBrowserDialog(
                 }
             }
         }
+    }
+
+    // Rename File Dialog
+    fileToRename?.let { f ->
+        var renameText by remember { mutableStateOf(f.name) }
+        AlertDialog(
+            onDismissRequest = { fileToRename = null },
+            title = { Text("Rename File", color = Color(0xFFE2E8F0)) },
+            text = {
+                OutlinedTextField(
+                    value = renameText,
+                    onValueChange = { renameText = it },
+                    label = { Text("File Name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val target = fileToRename
+                        if (target != null && renameText.isNotBlank() && renameText != target.name) {
+                            val newFile = File(target.parentFile, renameText.trim())
+                            val oldKey = target.nameWithoutExtension
+                            val newKey = newFile.nameWithoutExtension
+                            if (target.renameTo(newFile)) {
+                                if (BuiltInAssets.customBitmaps.containsKey(oldKey)) {
+                                    val bmp = BuiltInAssets.customBitmaps.remove(oldKey)
+                                    if (bmp != null) {
+                                        BuiltInAssets.customBitmaps[newKey] = bmp
+                                    }
+                                }
+                                statusMessage = "Renamed to ${newFile.name}"
+                                refreshFiles()
+                            }
+                        }
+                        fileToRename = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
+                ) {
+                    Text("Save")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { fileToRename = null }) {
+                    Text("Cancel", color = Color(0xFF94A3B8))
+                }
+            },
+            containerColor = Color(0xFF1E293B)
+        )
     }
 }

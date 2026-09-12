@@ -615,4 +615,23 @@ object BuiltInAssets {
     }
 
     fun getCustomBitmap(id: String): Bitmap? = customBitmaps[id]
+
+    fun loadSavedCustomTextures(context: android.content.Context) {
+        val baseAppDir = context.getExternalFilesDir(null) ?: context.filesDir
+        val texturesDir = java.io.File(baseAppDir, "textures")
+        if (texturesDir.exists()) {
+            texturesDir.listFiles()?.forEach { file ->
+                if (file.extension.lowercase() in listOf("png", "jpg", "jpeg", "webp")) {
+                    try {
+                        val bitmap = android.graphics.BitmapFactory.decodeFile(file.absolutePath)
+                        if (bitmap != null) {
+                            customBitmaps[file.nameWithoutExtension] = bitmap
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+            }
+        }
+    }
 }

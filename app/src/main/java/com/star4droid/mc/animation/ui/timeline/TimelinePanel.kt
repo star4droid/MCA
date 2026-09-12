@@ -69,6 +69,7 @@ import androidx.compose.material.icons.filled.VerticalAlignBottom
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.EmojiEmotions
+import androidx.compose.material.icons.filled.Undo
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
@@ -399,7 +400,8 @@ fun TimelinePanel(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(if (isLandscape) 220.dp else 125.dp)
+                .weight(1f, fill = false)
+                .heightIn(min = 90.dp, max = if (isLandscape) 160.dp else 125.dp)
                 .clip(RoundedCornerShape(8.dp))
                 .background(Color(0xFF090D16))
                 .border(1.dp, Color(0xFF1E293B), RoundedCornerShape(8.dp))

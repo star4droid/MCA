@@ -23,10 +23,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountTree
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.filled.Backspace
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
@@ -139,6 +142,7 @@ fun InspectorPanel(
     onClose: () -> Unit,
     onSelectNode: (String) -> Unit = {},
     onUpdateLightData: ((LightData) -> Unit)? = null,
+    onOpenTextureBrowser: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
@@ -198,7 +202,8 @@ fun InspectorPanel(
 
         Column(
             modifier = Modifier
-                .fillMaxSize()
+                .weight(1f)
+                .fillMaxWidth()
                 .verticalScroll(scrollState)
         ) {
             // Name Property & Type
@@ -506,12 +511,55 @@ fun InspectorPanel(
                         colors = SliderDefaults.colors(thumbColor = Color(0xFFA855F7), activeTrackColor = Color(0xFFA855F7))
                     )
                 }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Show Light Direction & Range Wireframe Lines Toggle
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Show Direction & Range Lines", fontWeight = FontWeight.SemiBold, fontSize = 11.sp, color = Color.White)
+                            Text("Draw wireframe direction rays & distance bounds", fontSize = 9.sp, color = Color(0xFF94A3B8))
+                        }
+                        androidx.compose.material3.Switch(
+                            checked = light.showHelperLines,
+                            onCheckedChange = { onUpdateLightData?.invoke(light.copy(showHelperLines = it)) },
+                            colors = androidx.compose.material3.SwitchDefaults.colors(checkedTrackColor = Color(0xFF38BDF8))
+                        )
+                    }
+                }
                 Spacer(modifier = Modifier.height(14.dp))
             }
 
             // Material / Block / Plane Texture
             if (node.type == SceneNodeType.BLOCK || node.type == SceneNodeType.GROUND || node.type == SceneNodeType.PLANE) {
-                Text("Texture Asset", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = Color(0xFF94A3B8))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Texture Asset", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = Color(0xFF94A3B8))
+                    if (onOpenTextureBrowser != null) {
+                        TextButton(
+                            onClick = onOpenTextureBrowser,
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+                        ) {
+                            Icon(Icons.Default.FolderOpen, contentDescription = null, tint = Color(0xFF38BDF8), modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Import Texture", fontSize = 11.sp, color = Color(0xFF38BDF8))
+                        }
+                    }
+                }
                 Spacer(modifier = Modifier.height(6.dp))
 
                 FlowRow(
@@ -519,20 +567,45 @@ fun InspectorPanel(
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
+                    // Built-in textures
                     BuiltInAssets.BLOCK_TEXTURES.forEach { def ->
                         val isSelected = node.material.textureAssetId == def.id
                         Box(
                             modifier = Modifier
-                                .size(32.dp)
+                                .size(34.dp)
                                 .clip(RoundedCornerShape(4.dp))
                                 .background(Color(def.sideColor))
                                 .border(
-                                    width = if (isSelected) 2.dp else 1.dp,
+                                    width = if (isSelected) 2.5.dp else 1.dp,
                                     color = if (isSelected) Color(0xFF22C55E) else Color(0xFF475569),
                                     shape = RoundedCornerShape(4.dp)
                                 )
                                 .clickable { onUpdateMaterial(def.id, node.material.opacity) }
                         )
+                    }
+
+                    // Custom Imported textures
+                    BuiltInAssets.customBitmaps.forEach { (customId, bitmap) ->
+                        val isSelected = node.material.textureAssetId == customId
+                        Box(
+                            modifier = Modifier
+                                .size(34.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(Color(0xFF0F172A))
+                                .border(
+                                    width = if (isSelected) 2.5.dp else 1.dp,
+                                    color = if (isSelected) Color(0xFF22C55E) else Color(0xFF475569),
+                                    shape = RoundedCornerShape(4.dp)
+                                )
+                                .clickable { onUpdateMaterial(customId, node.material.opacity) },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Image(
+                                bitmap = bitmap.asImageBitmap(),
+                                contentDescription = customId,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
                     }
                 }
                 Spacer(modifier = Modifier.height(10.dp))

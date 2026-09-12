@@ -1,7 +1,7 @@
 package com.star4droid.mc.animation.ai
 
 import android.content.Context
-import com.example.BuildConfig
+import com.star4droid.mc.animation.BuildConfig
 import com.star4droid.mc.animation.animation.ActionBlock
 import com.star4droid.mc.animation.animation.ActionBlockType
 import com.star4droid.mc.animation.animation.TimelineAsset

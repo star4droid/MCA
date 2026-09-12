@@ -413,26 +413,28 @@ object AnimationEvaluator {
 
             ActionBlockType.LOOK_LEFT -> {
                 parts[CharacterPartType.HEAD]?.let { head ->
+                    val baseT = runningTransforms.getOrPut(head.id) { head.baseTransform.copyTransform() }
+                    val targetAngle = 60f * block.amplitude
+                    val smoothT = if (isCompleted) 1f else progress * progress * (3f - 2f * progress)
+                    val angle = targetAngle * smoothT
+                    val newRot = head.animatedTransform.rotation.copy(y = baseT.rotation.y + angle)
+                    head.animatedTransform = head.animatedTransform.copy(rotation = newRot)
                     if (isCompleted) {
-                        head.animatedTransform = head.baseTransform.copyTransform()
-                    } else {
-                        val smoothT = sin(progress * PI.toFloat())
-                        head.animatedTransform = head.animatedTransform.copy(
-                            rotation = head.baseTransform.rotation.copy(y = 60f * smoothT * block.amplitude)
-                        )
+                        runningTransforms[head.id] = head.animatedTransform.copy(rotation = baseT.rotation.copy(y = baseT.rotation.y + targetAngle))
                     }
                 }
             }
 
             ActionBlockType.LOOK_RIGHT -> {
                 parts[CharacterPartType.HEAD]?.let { head ->
+                    val baseT = runningTransforms.getOrPut(head.id) { head.baseTransform.copyTransform() }
+                    val targetAngle = -60f * block.amplitude
+                    val smoothT = if (isCompleted) 1f else progress * progress * (3f - 2f * progress)
+                    val angle = targetAngle * smoothT
+                    val newRot = head.animatedTransform.rotation.copy(y = baseT.rotation.y + angle)
+                    head.animatedTransform = head.animatedTransform.copy(rotation = newRot)
                     if (isCompleted) {
-                        head.animatedTransform = head.baseTransform.copyTransform()
-                    } else {
-                        val smoothT = sin(progress * PI.toFloat())
-                        head.animatedTransform = head.animatedTransform.copy(
-                            rotation = head.baseTransform.rotation.copy(y = -60f * smoothT * block.amplitude)
-                        )
+                        runningTransforms[head.id] = head.animatedTransform.copy(rotation = baseT.rotation.copy(y = baseT.rotation.y + targetAngle))
                     }
                 }
             }
@@ -440,26 +442,28 @@ object AnimationEvaluator {
             ActionBlockType.BACKFLIP -> {
                 val baseT = runningTransforms.getOrPut(rootNode.id) { rootNode.baseTransform.copyTransform() }
                 if (isCompleted) {
-                    rootNode.animatedTransform = rootNode.animatedTransform.copy(position = baseT.position)
+                    rootNode.animatedTransform = baseT.copyTransform()
                     resetLimbs()
                 } else {
-                    // Jump arc
+                    // High parabolic jump arc
                     val jumpArc = sin(progress * PI.toFloat())
-                    val height = jumpArc * block.jumpHeight * block.amplitude
-                    // Full 360 backward rotation
+                    val height = jumpArc * block.jumpHeight * 1.5f * block.amplitude
+                    // Full 360 backward rotation on rootNode so legs, arms and head all rotate together!
                     val flipAngle = -360f * progress
+
                     rootNode.animatedTransform = rootNode.animatedTransform.copy(
-                        position = Vec3(baseT.position.x, baseT.position.y + height, baseT.position.z)
+                        position = Vec3(baseT.position.x, baseT.position.y + height, baseT.position.z),
+                        rotation = baseT.rotation.copy(x = flipAngle)
                     )
                     parts[CharacterPartType.BODY]?.let { body ->
-                        body.animatedTransform = body.animatedTransform.copy(rotation = body.baseTransform.rotation.copy(x = flipAngle))
+                        body.animatedTransform = body.animatedTransform.copy(rotation = body.baseTransform.rotation.copy(x = -15f * jumpArc))
                     }
-                    // Tuck legs during flip
+                    // Tightly tuck legs during flip
                     parts[CharacterPartType.LEFT_LEG]?.let {
-                        it.animatedTransform = it.animatedTransform.copy(rotation = it.baseTransform.rotation.copy(x = -90f * jumpArc))
+                        it.animatedTransform = it.animatedTransform.copy(rotation = it.baseTransform.rotation.copy(x = -75f * jumpArc))
                     }
                     parts[CharacterPartType.RIGHT_LEG]?.let {
-                        it.animatedTransform = it.animatedTransform.copy(rotation = it.baseTransform.rotation.copy(x = -90f * jumpArc))
+                        it.animatedTransform = it.animatedTransform.copy(rotation = it.baseTransform.rotation.copy(x = -75f * jumpArc))
                     }
                     parts[CharacterPartType.LEFT_LOWER_LEG]?.let {
                         it.animatedTransform = it.animatedTransform.copy(rotation = it.baseTransform.rotation.copy(x = 90f * jumpArc))
@@ -467,41 +471,47 @@ object AnimationEvaluator {
                     parts[CharacterPartType.RIGHT_LOWER_LEG]?.let {
                         it.animatedTransform = it.animatedTransform.copy(rotation = it.baseTransform.rotation.copy(x = 90f * jumpArc))
                     }
-                    // Arms pull back
+                    // Arms pull back & tuck into flip
                     parts[CharacterPartType.LEFT_ARM]?.let {
-                        it.animatedTransform = it.animatedTransform.copy(rotation = it.baseTransform.rotation.copy(x = -160f * jumpArc))
+                        it.animatedTransform = it.animatedTransform.copy(rotation = it.baseTransform.rotation.copy(x = -140f * jumpArc))
                     }
                     parts[CharacterPartType.RIGHT_ARM]?.let {
-                        it.animatedTransform = it.animatedTransform.copy(rotation = it.baseTransform.rotation.copy(x = -160f * jumpArc))
+                        it.animatedTransform = it.animatedTransform.copy(rotation = it.baseTransform.rotation.copy(x = -140f * jumpArc))
                     }
                     parts[CharacterPartType.LEFT_FOREARM]?.let {
-                        it.animatedTransform = it.animatedTransform.copy(rotation = it.baseTransform.rotation.copy(x = 80f * jumpArc))
+                        it.animatedTransform = it.animatedTransform.copy(rotation = it.baseTransform.rotation.copy(x = 75f * jumpArc))
                     }
                     parts[CharacterPartType.RIGHT_FOREARM]?.let {
-                        it.animatedTransform = it.animatedTransform.copy(rotation = it.baseTransform.rotation.copy(x = 80f * jumpArc))
+                        it.animatedTransform = it.animatedTransform.copy(rotation = it.baseTransform.rotation.copy(x = 75f * jumpArc))
                     }
                 }
             }
 
             ActionBlockType.JUMP_FRONT -> {
                 val baseT = runningTransforms.getOrPut(rootNode.id) { rootNode.baseTransform.copyTransform() }
-                val delta = moveDelta()
-                val currentPos = baseT.position + delta * progress
+                val displacement = if (block.enablePositionMove) block.moveVector else Vec3(0f, 0f, 2.5f * block.stepSize)
+                val currentPos = baseT.position + displacement * progress
                 val jumpArc = sin(progress * PI.toFloat())
-                val height = jumpArc * block.jumpHeight * block.stepSize
+                val height = jumpArc * block.jumpHeight * 1.2f
                 if (isCompleted) {
-                    rootNode.animatedTransform = rootNode.animatedTransform.copy(position = baseT.position + delta)
-                    runningTransforms[rootNode.id] = baseT.copy(position = baseT.position + delta)
+                    rootNode.animatedTransform = rootNode.animatedTransform.copy(position = baseT.position + displacement)
+                    runningTransforms[rootNode.id] = baseT.copy(position = baseT.position + displacement)
                     resetLimbs()
                 } else {
                     rootNode.animatedTransform = rootNode.animatedTransform.copy(
                         position = Vec3(currentPos.x, currentPos.y + height, currentPos.z)
                     )
-                    parts[CharacterPartType.LEFT_LEG]?.let { it.animatedTransform = it.animatedTransform.copy(rotation = it.baseTransform.rotation.copy(x = -30f * jumpArc)) }
-                    parts[CharacterPartType.RIGHT_LEG]?.let { it.animatedTransform = it.animatedTransform.copy(rotation = it.baseTransform.rotation.copy(x = 45f * jumpArc)) }
-                    parts[CharacterPartType.LEFT_ARM]?.let { it.animatedTransform = it.animatedTransform.copy(rotation = it.baseTransform.rotation.copy(x = -70f * jumpArc)) }
-                    parts[CharacterPartType.RIGHT_ARM]?.let { it.animatedTransform = it.animatedTransform.copy(rotation = it.baseTransform.rotation.copy(x = -70f * jumpArc)) }
-                    bendLowerLegs(-30f * jumpArc, 45f * jumpArc)
+                    parts[CharacterPartType.BODY]?.let { body ->
+                        body.animatedTransform = body.animatedTransform.copy(rotation = body.baseTransform.rotation.copy(x = -35f * jumpArc))
+                    }
+                    parts[CharacterPartType.HEAD]?.let { head ->
+                        head.animatedTransform = head.animatedTransform.copy(rotation = head.baseTransform.rotation.copy(x = 18f * jumpArc))
+                    }
+                    parts[CharacterPartType.LEFT_LEG]?.let { it.animatedTransform = it.animatedTransform.copy(rotation = it.baseTransform.rotation.copy(x = -45f * jumpArc)) }
+                    parts[CharacterPartType.RIGHT_LEG]?.let { it.animatedTransform = it.animatedTransform.copy(rotation = it.baseTransform.rotation.copy(x = -25f * jumpArc)) }
+                    parts[CharacterPartType.LEFT_ARM]?.let { it.animatedTransform = it.animatedTransform.copy(rotation = it.baseTransform.rotation.copy(x = 75f * jumpArc)) }
+                    parts[CharacterPartType.RIGHT_ARM]?.let { it.animatedTransform = it.animatedTransform.copy(rotation = it.baseTransform.rotation.copy(x = -75f * jumpArc)) }
+                    bendLowerLegs(60f * jumpArc, 45f * jumpArc)
                 }
             }
 
@@ -621,15 +631,15 @@ object AnimationEvaluator {
 
             ActionBlockType.CROSS_ARMS -> {
                 if (isCompleted) {
-                    parts[CharacterPartType.LEFT_ARM]?.let { it.animatedTransform = it.animatedTransform.copy(rotation = Vec3(-50f, -25f, 0f)) }
-                    parts[CharacterPartType.RIGHT_ARM]?.let { it.animatedTransform = it.animatedTransform.copy(rotation = Vec3(-50f, 25f, 0f)) }
-                    parts[CharacterPartType.LEFT_FOREARM]?.let { it.animatedTransform = it.animatedTransform.copy(rotation = it.baseTransform.rotation.copy(x = 90f)) }
+                    parts[CharacterPartType.LEFT_ARM]?.let { it.animatedTransform = it.animatedTransform.copy(rotation = Vec3(-45f, 30f, -30f)) }
+                    parts[CharacterPartType.RIGHT_ARM]?.let { it.animatedTransform = it.animatedTransform.copy(rotation = Vec3(-40f, -30f, 30f)) }
+                    parts[CharacterPartType.LEFT_FOREARM]?.let { it.animatedTransform = it.animatedTransform.copy(rotation = it.baseTransform.rotation.copy(x = 85f)) }
                     parts[CharacterPartType.RIGHT_FOREARM]?.let { it.animatedTransform = it.animatedTransform.copy(rotation = it.baseTransform.rotation.copy(x = 90f)) }
                 } else {
                     val smoothT = progress * progress * (3f - 2f * progress)
-                    parts[CharacterPartType.LEFT_ARM]?.let { it.animatedTransform = it.animatedTransform.copy(rotation = Vec3(-50f * smoothT, -25f * smoothT, 0f)) }
-                    parts[CharacterPartType.RIGHT_ARM]?.let { it.animatedTransform = it.animatedTransform.copy(rotation = Vec3(-50f * smoothT, 25f * smoothT, 0f)) }
-                    parts[CharacterPartType.LEFT_FOREARM]?.let { it.animatedTransform = it.animatedTransform.copy(rotation = it.baseTransform.rotation.copy(x = 90f * smoothT)) }
+                    parts[CharacterPartType.LEFT_ARM]?.let { it.animatedTransform = it.animatedTransform.copy(rotation = Vec3(-45f * smoothT, 30f * smoothT, -30f * smoothT)) }
+                    parts[CharacterPartType.RIGHT_ARM]?.let { it.animatedTransform = it.animatedTransform.copy(rotation = Vec3(-40f * smoothT, -30f * smoothT, 30f * smoothT)) }
+                    parts[CharacterPartType.LEFT_FOREARM]?.let { it.animatedTransform = it.animatedTransform.copy(rotation = it.baseTransform.rotation.copy(x = 85f * smoothT)) }
                     parts[CharacterPartType.RIGHT_FOREARM]?.let { it.animatedTransform = it.animatedTransform.copy(rotation = it.baseTransform.rotation.copy(x = 90f * smoothT)) }
                 }
             }
@@ -653,21 +663,34 @@ object AnimationEvaluator {
                 val baseT = runningTransforms.getOrPut(rootNode.id) { rootNode.baseTransform.copyTransform() }
                 if (isCompleted) {
                     rootNode.animatedTransform = rootNode.animatedTransform.copy(
-                        position = baseT.position.copy(y = baseT.position.y - 0.6f)
+                        position = Vec3(baseT.position.x, baseT.position.y - 0.5f, baseT.position.z - 0.4f)
                     )
                     parts[CharacterPartType.BODY]?.let { body ->
-                        body.animatedTransform = body.animatedTransform.copy(rotation = body.baseTransform.rotation.copy(x = 90f))
+                        body.animatedTransform = body.animatedTransform.copy(rotation = body.baseTransform.rotation.copy(x = -90f))
                     }
+                    parts[CharacterPartType.HEAD]?.let { head ->
+                        head.animatedTransform = head.animatedTransform.copy(rotation = head.baseTransform.rotation.copy(x = -30f))
+                    }
+                    parts[CharacterPartType.LEFT_ARM]?.let { it.animatedTransform = it.animatedTransform.copy(rotation = Vec3(-140f, 0f, 40f)) }
+                    parts[CharacterPartType.RIGHT_ARM]?.let { it.animatedTransform = it.animatedTransform.copy(rotation = Vec3(-140f, 0f, -40f)) }
+                    parts[CharacterPartType.LEFT_LEG]?.let { it.animatedTransform = it.animatedTransform.copy(rotation = it.baseTransform.rotation.copy(x = -20f)) }
+                    parts[CharacterPartType.RIGHT_LEG]?.let { it.animatedTransform = it.animatedTransform.copy(rotation = it.baseTransform.rotation.copy(x = 20f)) }
                 } else {
                     val smoothT = progress * progress
                     rootNode.animatedTransform = rootNode.animatedTransform.copy(
-                        position = baseT.position.copy(y = baseT.position.y - 0.6f * smoothT)
+                        position = Vec3(baseT.position.x, baseT.position.y - 0.5f * smoothT, baseT.position.z - 0.4f * smoothT)
                     )
                     parts[CharacterPartType.BODY]?.let { body ->
-                        body.animatedTransform = body.animatedTransform.copy(rotation = body.baseTransform.rotation.copy(x = 90f * smoothT))
+                        body.animatedTransform = body.animatedTransform.copy(rotation = body.baseTransform.rotation.copy(x = -90f * smoothT))
                     }
-                    parts[CharacterPartType.LEFT_ARM]?.let { it.animatedTransform = it.animatedTransform.copy(rotation = Vec3(-30f * smoothT, 0f, 45f * smoothT)) }
-                    parts[CharacterPartType.RIGHT_ARM]?.let { it.animatedTransform = it.animatedTransform.copy(rotation = Vec3(-30f * smoothT, 0f, -45f * smoothT)) }
+                    parts[CharacterPartType.HEAD]?.let { head ->
+                        head.animatedTransform = head.animatedTransform.copy(rotation = head.baseTransform.rotation.copy(x = -30f * smoothT))
+                    }
+                    parts[CharacterPartType.LEFT_ARM]?.let { it.animatedTransform = it.animatedTransform.copy(rotation = Vec3(-140f * smoothT, 0f, 40f * smoothT)) }
+                    parts[CharacterPartType.RIGHT_ARM]?.let { it.animatedTransform = it.animatedTransform.copy(rotation = Vec3(-140f * smoothT, 0f, -40f * smoothT)) }
+                    parts[CharacterPartType.LEFT_LEG]?.let { it.animatedTransform = it.animatedTransform.copy(rotation = it.baseTransform.rotation.copy(x = -20f * smoothT)) }
+                    parts[CharacterPartType.RIGHT_LEG]?.let { it.animatedTransform = it.animatedTransform.copy(rotation = it.baseTransform.rotation.copy(x = 20f * smoothT)) }
+                    bendLowerLegs(45f * smoothT, 30f * smoothT)
                 }
             }
 
@@ -728,13 +751,20 @@ object AnimationEvaluator {
 
             ActionBlockType.TAUNT -> {
                 if (isCompleted) {
-                    parts[CharacterPartType.RIGHT_ARM]?.let { it.animatedTransform = it.baseTransform.copyTransform() }
-                    parts[CharacterPartType.RIGHT_FOREARM]?.let { it.animatedTransform = it.baseTransform.copyTransform() }
+                    resetLimbs()
                 } else {
                     val cycle = (progress * block.duration * (PI * 2.0 * 2.5 * block.speed)).toFloat()
-                    val beckon = sin(cycle) * 25f
-                    parts[CharacterPartType.RIGHT_ARM]?.let { it.animatedTransform = it.animatedTransform.copy(rotation = Vec3(-80f, 0f, -20f)) }
+                    val beckon = sin(cycle) * 30f
+                    // Left hand on hip
+                    parts[CharacterPartType.LEFT_ARM]?.let { it.animatedTransform = it.animatedTransform.copy(rotation = Vec3(-20f, 0f, 35f)) }
+                    parts[CharacterPartType.LEFT_FOREARM]?.let { it.animatedTransform = it.animatedTransform.copy(rotation = it.baseTransform.rotation.copy(x = 70f)) }
+                    // Right arm waving/beckoning
+                    parts[CharacterPartType.RIGHT_ARM]?.let { it.animatedTransform = it.animatedTransform.copy(rotation = Vec3(-120f, 0f, -20f)) }
                     parts[CharacterPartType.RIGHT_FOREARM]?.let { it.animatedTransform = it.animatedTransform.copy(rotation = it.baseTransform.rotation.copy(x = 60f + beckon)) }
+                    // Head cocking
+                    parts[CharacterPartType.HEAD]?.let { head ->
+                        head.animatedTransform = head.animatedTransform.copy(rotation = Vec3(-10f, sin(cycle) * 15f, 10f))
+                    }
                 }
             }
         }

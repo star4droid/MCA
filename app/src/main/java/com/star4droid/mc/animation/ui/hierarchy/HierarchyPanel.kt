@@ -57,7 +57,6 @@ fun HierarchyPanel(
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
-    val horizontalScrollState = rememberScrollState()
 
     Column(
         modifier = modifier
@@ -100,7 +99,6 @@ fun HierarchyPanel(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .horizontalScroll(horizontalScrollState)
                 .verticalScroll(scrollState)
         ) {
             for (rootId in sceneGraph.rootNodeIds) {

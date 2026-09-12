@@ -555,7 +555,10 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
 
     fun addBlockAt(position: Vec3, textureId: String = _uiState.value.selectedBlockTexture) {
         val id = UUID.randomUUID().toString()
-        val parentId = _uiState.value.worldBuildingParentId
+        val rawParentId = _uiState.value.worldBuildingParentId
+        val parentNode = rawParentId?.let { sceneGraph.getNode(it) }
+        val parentId = if (parentNode?.type == SceneNodeType.BLOCK || parentNode?.type == SceneNodeType.PLANE) null else rawParentId
+
         val node = SceneNode(
             id = id,
             name = "Block ${sceneGraph.nodes.size + 1}",
@@ -687,6 +690,16 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
     fun updateNodeLightData(nodeId: String, lightData: LightData) {
         val node = sceneGraph.getNode(nodeId) ?: return
         node.lightData = lightData.copy()
+        val currentPrefix = when (lightData.lightType) {
+            com.star4droid.mc.animation.engine.scene.LightType.SUN -> "Sun Light"
+            com.star4droid.mc.animation.engine.scene.LightType.POINT -> "Point Light"
+            com.star4droid.mc.animation.engine.scene.LightType.SPOT -> "Spot Light"
+        }
+        if (node.name.startsWith("Sun Light") || node.name.startsWith("Point Light") || node.name.startsWith("Spot Light")) {
+            val suffix = node.name.substringAfterLast(" ", "")
+            node.name = "$currentPrefix ${suffix.ifEmpty { "1" }}"
+        }
+        saveProject()
         triggerRecomposition()
     }
 

@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -88,6 +89,7 @@ fun WorldBuildingOverlay(
             tonalElevation = 6.dp,
             modifier = Modifier
                 .align(Alignment.TopStart)
+                .statusBarsPadding()
                 .padding(12.dp)
         ) {
             Row(
@@ -330,7 +332,7 @@ fun WorldBuildingOverlay(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 // Scrollable List of Block Textures
-                val allTextures = remember {
+                val allTextures = remember(BuiltInAssets.customBitmaps.size) {
                     val list = BuiltInAssets.BLOCK_TEXTURES.map { it.id }.toMutableList()
                     BuiltInAssets.customBitmaps.keys.forEach { customId ->
                         if (!list.contains(customId)) list.add(0, customId)

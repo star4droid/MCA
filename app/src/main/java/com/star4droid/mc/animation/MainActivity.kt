@@ -1,4 +1,4 @@
-package com.example
+package com.star4droid.mc.animation
 
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration

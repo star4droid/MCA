@@ -264,6 +264,16 @@ fun ActionBlockSettingsDialog(
                         )
                     }
 
+                    ActionBlockType.LOOK_LEFT, ActionBlockType.LOOK_RIGHT -> {
+                        Text("Head Turn Amplitude: ${String.format("%.2f", stepSize)}x", fontSize = 12.sp, color = Color(0xFFE2E8F0))
+                        Slider(
+                            value = stepSize,
+                            onValueChange = { stepSize = (Math.round(it * 100f) / 100f).coerceIn(0.1f, 3.0f) },
+                            valueRange = 0.1f..3.0f,
+                            colors = SliderDefaults.colors(thumbColor = Color(0xFF38BDF8), activeTrackColor = Color(0xFF0284C7))
+                        )
+                    }
+
                     else -> {
                         Text("Action Motion Amplitude: ${String.format("%.2f", stepSize)}x", fontSize = 12.sp, color = Color(0xFFE2E8F0))
                         Slider(

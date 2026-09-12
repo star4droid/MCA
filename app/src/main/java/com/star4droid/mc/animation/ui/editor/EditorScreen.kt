@@ -17,16 +17,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
+import com.star4droid.mc.animation.assets.BuiltInAssets
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -74,6 +68,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -108,8 +103,11 @@ fun EditorScreen(
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
     val density = LocalDensity.current
 
+    val context = androidx.compose.ui.platform.LocalContext.current
+
     LaunchedEffect(projectId) {
         viewModel.loadProject(projectId)
+        BuiltInAssets.loadSavedCustomTextures(context)
     }
 
     var addMenuOpen by remember { mutableStateOf(false) }
@@ -127,32 +125,13 @@ fun EditorScreen(
     var timelineHeight by remember { mutableStateOf(defaultTimelineHeight) }
     var timelineWidth by remember { mutableStateOf(defaultTimelineWidth) }
 
-    Box(modifier = Modifier.fillMaxSize().background(Color(0xFF0B101B))) {
-        // 1. 3D Viewport
-        Viewport3D(viewModel = viewModel)
-
-        // 2. World Building Mode Overlay (If enabled: all other UI hidden!)
-        if (uiState.isWorldBuildingMode) {
-            WorldBuildingOverlay(
-                activeTool = uiState.worldBuildingTool,
-                selectedTextureId = uiState.selectedBlockTexture,
-                selectedParentId = uiState.worldBuildingParentId,
-                parentName = uiState.worldBuildingParentId?.let { viewModel.sceneGraph.getNode(it)?.name } ?: "Root",
-                candidateParents = viewModel.sceneGraph.getAllNodes().filter { it.type != com.star4droid.mc.animation.engine.scene.SceneNodeType.CAMERA },
-                onSelectTool = { viewModel.setWorldBuildingTool(it) },
-                onSelectTexture = { viewModel.setWorldBuildingTexture(it) },
-                onSelectParent = { viewModel.setWorldBuildingParent(it) },
-                onAddBlockAtCursor = { viewModel.addBlockAtCursor() },
-                onOpenImportBrowser = { viewModel.toggleFileBrowser() },
-                onExitMode = { viewModel.exitWorldBuildingMode() }
-            )
-        } else {
-            // Normal Editor UI
-
-            // 2A. Top Bar
+    Column(modifier = Modifier.fillMaxSize().background(Color(0xFF0B101B))) {
+        if (!uiState.isWorldBuildingMode) {
+            // 1. Top Bar (Top element in vertical Column layout)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .zIndex(10f)
                     .background(Color(0xE60F172A))
                     .then(if (!isLandscape) Modifier.statusBarsPadding() else Modifier)
                     .horizontalScroll(topBarScrollState)
@@ -311,7 +290,9 @@ fun EditorScreen(
                     DropdownMenu(
                         expanded = addMenuOpen,
                         onDismissRequest = { addMenuOpen = false },
-                        modifier = Modifier.background(Color(0xFF1E293B))
+                        modifier = Modifier
+                            .background(Color(0xFF1E293B))
+                            .heightIn(max = 350.dp)
                     ) {
                         DropdownMenuItem(
                             text = { Text("Add Block (Grass)", color = Color.White) },
@@ -346,6 +327,10 @@ fun EditorScreen(
                             onClick = { addMenuOpen = false; viewModel.addCharacter(false, "miner") }
                         )
                         DropdownMenuItem(
+                            text = { Text("Add Plane 🗺️", color = Color.White) },
+                            onClick = { addMenuOpen = false; viewModel.addPlane("grass") }
+                        )
+                        DropdownMenuItem(
                             text = { Text("Add Scene Camera", color = Color.White) },
                             onClick = { addMenuOpen = false; viewModel.addCamera() }
                         )
@@ -360,6 +345,10 @@ fun EditorScreen(
                         DropdownMenuItem(
                             text = { Text("Add Spot Light 🔦", color = Color.White) },
                             onClick = { addMenuOpen = false; viewModel.addLight(LightType.SPOT) }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Import 3D Model (.obj) 📦", color = Color(0xFF38BDF8), fontWeight = FontWeight.Bold) },
+                            onClick = { addMenuOpen = false; viewModel.toggleFileBrowser() }
                         )
                     }
                 }
@@ -422,6 +411,8 @@ fun EditorScreen(
                     )
                 }
 
+                Spacer(modifier = Modifier.width(4.dp))
+
                 IconButton(
                     onClick = { viewModel.toggleAssetBrowser() },
                     modifier = Modifier.size(32.dp)
@@ -441,122 +432,153 @@ fun EditorScreen(
                 }
             }
 
-            // 2B. Floating Panel Toggles
+            // 2. Separated Row on the Right Side UNDER top scrollable bar for Tree / Inspect / Timeline toggles!
             Row(
                 modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(top = 50.dp, end = 10.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color(0xCC1E293B))
-                    .padding(3.dp),
+                    .fillMaxWidth()
+                    .zIndex(9f)
+                    .background(Color(0x800F172A))
+                    .padding(end = 8.dp, top = 3.dp, bottom = 3.dp),
+                horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                PanelToggleButton(Icons.Default.AccountTree, "Tree", uiState.isHierarchyOpen) { viewModel.toggleHierarchy() }
-                Spacer(modifier = Modifier.width(4.dp))
-                PanelToggleButton(Icons.Default.Tune, "Inspect", uiState.isInspectorOpen) { viewModel.toggleInspector() }
-                Spacer(modifier = Modifier.width(4.dp))
-                PanelToggleButton(Icons.Default.Timeline, "Timeline", uiState.isTimelineOpen) { viewModel.toggleTimeline() }
-            }
-
-            // 3. Left Hierarchy Panel with Resizable Drag Handle
-            AnimatedVisibility(
-                visible = uiState.isHierarchyOpen,
-                enter = slideInHorizontally(initialOffsetX = { -it }) + fadeIn(),
-                exit = slideOutHorizontally(targetOffsetX = { -it }) + fadeOut(),
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(top = 50.dp)
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    HierarchyPanel(
-                        sceneGraph = viewModel.sceneGraph,
-                        selectedNodeId = uiState.selectedNodeId,
-                        onSelectNode = { viewModel.selectNode(it) },
-                        onDeleteNode = { viewModel.deleteSelectedNode() },
-                        onDuplicateNode = { viewModel.duplicateSelectedNode() },
-                        onClose = { viewModel.toggleHierarchy() },
-                        modifier = Modifier.width(hierarchyWidth)
-                    )
-
-                    // REQUIREMENT 9: Hierarchy Resizable Handle
-                    PanelResizeHandle(
-                        isVertical = false,
-                        onDrag = { dx ->
-                            with(density) {
-                                val newW = hierarchyWidth + dx.toDp()
-                                hierarchyWidth = newW.coerceIn(180.dp, 450.dp)
-                            }
-                        },
-                        onDoubleTap = { hierarchyWidth = defaultHierarchyWidth }
-                    )
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0xCC1E293B))
+                        .padding(3.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    PanelToggleButton(Icons.Default.AccountTree, "Tree", uiState.isHierarchyOpen) { viewModel.toggleHierarchy() }
+                    Spacer(modifier = Modifier.width(4.dp))
+                    PanelToggleButton(Icons.Default.Tune, "Inspect", uiState.isInspectorOpen) { viewModel.toggleInspector() }
+                    Spacer(modifier = Modifier.width(4.dp))
+                    PanelToggleButton(Icons.Default.Timeline, "Timeline", uiState.isTimelineOpen) { viewModel.toggleTimeline() }
                 }
             }
+        }
 
-            // 4. Right Inspector Panel with Resizable Drag Handle
-            AnimatedVisibility(
-                visible = uiState.isInspectorOpen,
-                enter = slideInHorizontally(initialOffsetX = { it }) + fadeIn(),
-                exit = slideOutHorizontally(targetOffsetX = { it }) + fadeOut(),
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(top = 86.dp)
-            ) {
-                val selectedNode = uiState.selectedNodeId?.let { viewModel.sceneGraph.getNode(it) }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    // REQUIREMENT 9: Inspector Resizable Handle on left edge
-                    PanelResizeHandle(
-                        isVertical = false,
-                        onDrag = { dx ->
-                            with(density) {
-                                val newW = inspectorWidth - dx.toDp()
-                                inspectorWidth = newW.coerceIn(200.dp, 480.dp)
-                            }
-                        },
-                        onDoubleTap = { inspectorWidth = defaultInspectorWidth }
-                    )
+        // 3. Main Workspace Container (Starts physically BELOW panel toggles row in Column layout)
+        Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+            // 2A. 3D Viewport
+            Viewport3D(viewModel = viewModel)
 
-                    InspectorPanel(
-                        node = selectedNode,
-                        allNodes = viewModel.sceneGraph.nodes.values.toList(),
-                        isSelectionLocked = uiState.isSelectionLocked,
-                        onToggleSelectionLock = { viewModel.toggleSelectionLock() },
-                        onRenameNode = { newName ->
-                            uiState.selectedNodeId?.let { viewModel.renameNode(it, newName) }
-                        },
-                        onReparentNode = { newParentId ->
-                            uiState.selectedNodeId?.let { viewModel.reparentNode(it, newParentId) }
-                        },
-                        onUpdateTransform = { newT ->
-                            uiState.selectedNodeId?.let { viewModel.updateNodeTransform(it, newT) }
-                        },
-                        onAddKeyframe = { path, v ->
-                            uiState.selectedNodeId?.let { viewModel.addKeyframe(it, path, v) }
-                        },
-                        onKeyframeAll = {
-                            uiState.selectedNodeId?.let { viewModel.keyframeAllTransform(it) }
-                        },
-                        onApplyPreset = { preset -> viewModel.applyPreset(preset) },
-                        onUpdateMaterial = { texId, op ->
-                            uiState.selectedNodeId?.let { viewModel.updateNodeMaterial(it, texId, op) }
-                        },
-                        onUpdateLightData = { lightData ->
-                            uiState.selectedNodeId?.let { viewModel.updateNodeLightData(it, lightData) }
-                        },
-                        onClose = { viewModel.toggleInspector() },
-                        onSelectNode = { viewModel.selectNode(it) },
-                        modifier = Modifier.width(inspectorWidth)
-                    )
+            // 2B. World Building Mode Overlay (If enabled: all other UI hidden!)
+            if (uiState.isWorldBuildingMode) {
+                WorldBuildingOverlay(
+                    activeTool = uiState.worldBuildingTool,
+                    selectedTextureId = uiState.selectedBlockTexture,
+                    selectedParentId = uiState.worldBuildingParentId,
+                    parentName = uiState.worldBuildingParentId?.let { viewModel.sceneGraph.getNode(it)?.name } ?: "Root",
+                    candidateParents = viewModel.sceneGraph.getAllNodes().filter { it.type != com.star4droid.mc.animation.engine.scene.SceneNodeType.CAMERA },
+                    onSelectTool = { viewModel.setWorldBuildingTool(it) },
+                    onSelectTexture = { viewModel.setWorldBuildingTexture(it) },
+                    onSelectParent = { viewModel.setWorldBuildingParent(it) },
+                    onAddBlockAtCursor = { viewModel.addBlockAtCursor() },
+                    onOpenImportBrowser = { viewModel.toggleFileBrowser() },
+                    onExitMode = { viewModel.exitWorldBuildingMode() }
+                )
+            } else {
+                // Normal Editor Floating Panels Overlay (Under Top Bar in Column)
+
+                // 2C. Inspector Panel (Aligned to Top Right of Workspace container)
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = uiState.isInspectorOpen,
+                    enter = slideInHorizontally(initialOffsetX = { it }) + fadeIn(),
+                    exit = slideOutHorizontally(targetOffsetX = { it }) + fadeOut(),
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = 6.dp, end = 6.dp)
+                ) {
+                    val selectedNode = uiState.selectedNodeId?.let { viewModel.sceneGraph.getNode(it) }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        PanelResizeHandle(
+                            isVertical = false,
+                            onDrag = { dx ->
+                                with(density) {
+                                    val newW = inspectorWidth - dx.toDp()
+                                    inspectorWidth = newW.coerceIn(200.dp, 480.dp)
+                                }
+                            },
+                            onDoubleTap = { inspectorWidth = defaultInspectorWidth }
+                        )
+
+                        InspectorPanel(
+                            node = selectedNode,
+                            allNodes = viewModel.sceneGraph.nodes.values.toList(),
+                            isSelectionLocked = uiState.isSelectionLocked,
+                            onToggleSelectionLock = { viewModel.toggleSelectionLock() },
+                            onRenameNode = { newName ->
+                                uiState.selectedNodeId?.let { viewModel.renameNode(it, newName) }
+                            },
+                            onReparentNode = { newParentId ->
+                                uiState.selectedNodeId?.let { viewModel.reparentNode(it, newParentId) }
+                            },
+                            onUpdateTransform = { newT ->
+                                uiState.selectedNodeId?.let { viewModel.updateNodeTransform(it, newT) }
+                            },
+                            onAddKeyframe = { path, v ->
+                                uiState.selectedNodeId?.let { viewModel.addKeyframe(it, path, v) }
+                            },
+                            onKeyframeAll = {
+                                uiState.selectedNodeId?.let { viewModel.keyframeAllTransform(it) }
+                            },
+                            onApplyPreset = { preset -> viewModel.applyPreset(preset) },
+                            onUpdateMaterial = { texId, op ->
+                                uiState.selectedNodeId?.let { viewModel.updateNodeMaterial(it, texId, op) }
+                            },
+                            onUpdateLightData = { lightData ->
+                                uiState.selectedNodeId?.let { viewModel.updateNodeLightData(it, lightData) }
+                            },
+                            onClose = { viewModel.toggleInspector() },
+                            onSelectNode = { viewModel.selectNode(it) },
+                            onOpenTextureBrowser = { viewModel.toggleFileBrowser() },
+                            modifier = Modifier.width(inspectorWidth)
+                        )
+                    }
                 }
-            }
 
-            // 5. Block-based Timeline Panel (Orientation Aware: Bottom in Portrait, Side in Landscape)
-            AnimatedVisibility(
-                visible = uiState.isTimelineOpen,
-                enter = if (isLandscape) slideInHorizontally(initialOffsetX = { -it }) + fadeIn() else slideInVertically(initialOffsetY = { it }) + fadeIn(),
-                exit = if (isLandscape) slideOutHorizontally(targetOffsetX = { -it }) + fadeOut() else slideOutVertically(targetOffsetY = { it }) + fadeOut(),
-                modifier = if (isLandscape) Modifier.align(Alignment.TopStart).padding(top = 50.dp) else Modifier.align(Alignment.BottomCenter)
-            ) {
-                val selectedPos = uiState.selectedNodeId?.let { viewModel.sceneGraph.getNode(it)?.animatedTransform?.position }
+                // 2D. Left Hierarchy Panel with Resizable Drag Handle
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = uiState.isHierarchyOpen,
+                    enter = slideInHorizontally(initialOffsetX = { -it }) + fadeIn(),
+                    exit = slideOutHorizontally(targetOffsetX = { -it }) + fadeOut(),
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(top = 6.dp, start = 6.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        HierarchyPanel(
+                            sceneGraph = viewModel.sceneGraph,
+                            selectedNodeId = uiState.selectedNodeId,
+                            onSelectNode = { viewModel.selectNode(it) },
+                            onDeleteNode = { viewModel.deleteSelectedNode() },
+                            onDuplicateNode = { viewModel.duplicateSelectedNode() },
+                            onClose = { viewModel.toggleHierarchy() },
+                            modifier = Modifier.width(hierarchyWidth)
+                        )
+
+                        PanelResizeHandle(
+                            isVertical = false,
+                            onDrag = { dx ->
+                                with(density) {
+                                    val newW = hierarchyWidth + dx.toDp()
+                                    hierarchyWidth = newW.coerceIn(180.dp, 450.dp)
+                                }
+                            },
+                            onDoubleTap = { hierarchyWidth = defaultHierarchyWidth }
+                        )
+                    }
+                }
+
+                // 2E. Block-based Timeline Panel (Orientation Aware: Bottom in Portrait, Side in Landscape)
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = uiState.isTimelineOpen,
+                    enter = if (isLandscape) slideInHorizontally(initialOffsetX = { -it }) + fadeIn() else slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                    exit = if (isLandscape) slideOutHorizontally(targetOffsetX = { -it }) + fadeOut() else slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+                    modifier = if (isLandscape) Modifier.align(Alignment.TopStart).padding(top = 6.dp, start = 6.dp) else Modifier.align(Alignment.BottomCenter)
+                ) {
+                    val selectedPos = uiState.selectedNodeId?.let { viewModel.sceneGraph.getNode(it)?.animatedTransform?.position }
 
                 if (isLandscape) {
                     // Landscape Side Timeline
@@ -654,6 +676,9 @@ fun EditorScreen(
                 onAddBlockWithTexture = { texId ->
                     viewModel.addBlock(texId)
                 },
+                onAddPlaneWithTexture = { texId ->
+                    viewModel.addPlane(texId)
+                },
                 onAddCharacterWithSkin = { skinId ->
                     viewModel.addCharacter(skinId == "alex", skinId)
                 }
@@ -664,6 +689,11 @@ fun EditorScreen(
         if (uiState.isFileBrowserOpen) {
             FileBrowserDialog(
                 onDismiss = { viewModel.toggleFileBrowser() },
+                onFileSelected = { file ->
+                    if (file.extension.lowercase() in listOf("obj", "json", "bbmodel", "gltf")) {
+                        viewModel.importObjFile(file)
+                    }
+                },
                 onTextureImported = { texId ->
                     uiState.selectedNodeId?.let { viewModel.updateNodeMaterial(it, texId) }
                 }
@@ -675,18 +705,6 @@ fun EditorScreen(
             SideAiDialog(
                 viewModel = viewModel,
                 onDismiss = { viewModel.toggleSideAi() }
-            )
-        }
-
-        // File Browser Dialog
-        if (uiState.isFileBrowserOpen) {
-            FileBrowserDialog(
-                onDismiss = { viewModel.toggleFileBrowser() },
-                onFileSelected = { file ->
-                    if (file.extension.lowercase() == "obj") {
-                        viewModel.importObjFile(file)
-                    }
-                }
             )
         }
 
@@ -709,7 +727,7 @@ fun EditorScreen(
             Box(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .padding(top = 54.dp)
+                    .padding(top = 16.dp)
                     .clip(RoundedCornerShape(8.dp))
                     .background(Color(0xFF22C55E))
                     .padding(horizontal = 16.dp, vertical = 8.dp)
@@ -722,6 +740,7 @@ fun EditorScreen(
             }
         }
     }
+}
 }
 
 // REQUIREMENT 9: Panel Resize Handle Component with Double-Tap Reset

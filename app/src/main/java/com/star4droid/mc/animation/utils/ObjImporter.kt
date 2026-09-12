@@ -74,7 +74,6 @@ object ObjImporter {
         val centerX = if (maxX >= minX) (minX + maxX) * 0.5f else 0f
         val centerY = if (maxY >= minY) (minY + maxY) * 0.5f else 0.5f
         val centerZ = if (maxZ >= minZ) (minZ + maxZ) * 0.5f else 0f
-
         return SceneNode(
             id = UUID.randomUUID().toString(),
             name = "Imported OBJ Model",
@@ -83,6 +82,30 @@ object ObjImporter {
             animatedTransform = Transform(position = Vec3(centerX, centerY, centerZ)),
             material = Material(textureAssetId = "stone"),
             boxDimensions = Vec3(spanX, spanY, spanZ)
+        )
+    }
+
+    fun parseObjFile(file: File): SceneNode {
+        val node = parseObjFile(file.inputStream())
+        var textureId = "stone"
+        val parent = file.parentFile
+        if (parent != null) {
+            val baseName = file.nameWithoutExtension
+            val imgExtensions = listOf("png", "jpg", "jpeg", "webp")
+            val matchingImg = parent.listFiles()?.firstOrNull { 
+                it.nameWithoutExtension.equals(baseName, ignoreCase = true) && it.extension.lowercase() in imgExtensions
+            }
+            if (matchingImg != null) {
+                val bitmap = try { android.graphics.BitmapFactory.decodeFile(matchingImg.path) } catch(e: Exception) { null }
+                if (bitmap != null) {
+                    textureId = matchingImg.nameWithoutExtension
+                    com.star4droid.mc.animation.assets.BuiltInAssets.registerCustomTexture(textureId, bitmap)
+                }
+            }
+        }
+        return node.copy(
+            name = file.nameWithoutExtension,
+            material = Material(textureAssetId = textureId)
         )
     }
 
