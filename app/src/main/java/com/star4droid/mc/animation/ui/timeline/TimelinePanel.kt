@@ -30,7 +30,6 @@ import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.DirectionsRun
 import androidx.compose.material.icons.filled.DirectionsWalk
 import androidx.compose.material.icons.filled.DragIndicator
@@ -55,8 +54,6 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -73,7 +70,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.star4droid.mc.animation.animation.ActionBlock
@@ -112,6 +108,7 @@ fun TimelinePanel(
     isLooping: Boolean,
     selectedNodeId: String?,
     selectedNodePosition: Vec3?,
+    isLandscape: Boolean = false,
     onPlayPause: () -> Unit,
     onSeek: (Float) -> Unit,
     onReset: () -> Unit,
@@ -131,7 +128,6 @@ fun TimelinePanel(
 ) {
     val duration = (timeline?.duration ?: 10.0f).coerceAtLeast(10f)
     var addBlockMenuOpen by remember { mutableStateOf(false) }
-    var timelineMenuOpen by remember { mutableStateOf(false) }
     var importMenuOpen by remember { mutableStateOf(false) }
     var selectedBlockId by remember { mutableStateOf<String?>(null) }
     var editingBlock by remember { mutableStateOf<ActionBlock?>(null) }
@@ -139,13 +135,20 @@ fun TimelinePanel(
     val horizontalScroll = rememberScrollState()
     val verticalScroll = rememberScrollState()
 
-    // 80 dp per second scale for generous horizontal spacing
     val dpPerSecond = 80.dp
     val totalTimelineWidth = dpPerSecond * duration
 
-    val blocks = timeline?.actionBlocks ?: emptyList()
+    // REQUIREMENT 4: Filter action blocks by selected item so each object has separate blocks!
+    val allBlocks = timeline?.actionBlocks ?: emptyList()
+    val blocks = remember(allBlocks, selectedNodeId) {
+        if (selectedNodeId == null) {
+            allBlocks
+        } else {
+            val filtered = allBlocks.filter { it.targetNodeId == selectedNodeId }
+            if (filtered.isNotEmpty()) filtered else allBlocks.filter { it.targetNodeId.isEmpty() }
+        }
+    }
     val maxRow = (blocks.maxOfOrNull { it.trackRow } ?: 2).coerceAtLeast(3)
-
     val density = LocalDensity.current
 
     // Action Block Settings Dialog
@@ -167,12 +170,11 @@ fun TimelinePanel(
 
     Column(
         modifier = modifier
-            .fillMaxWidth()
             .background(Color(0xF50F172A))
             .border(1.dp, Color(0xFF334155))
             .padding(horizontal = 8.dp, vertical = 6.dp)
     ) {
-        // 1. Top Control Bar (Clean Material 3 Icons in Horizontally Scrollable Row)
+        // 1. Header Control Bar (Fixed Import/Export Button sizes)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -180,12 +182,10 @@ fun TimelinePanel(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            // Playback controls
             IconButton(onClick = onReset, modifier = Modifier.size(28.dp)) {
                 Icon(Icons.Default.SkipPrevious, contentDescription = "Reset", tint = Color(0xFFE2E8F0), modifier = Modifier.size(18.dp))
             }
 
-            // Decreased play button size
             IconButton(
                 onClick = onPlayPause,
                 modifier = Modifier
@@ -210,7 +210,6 @@ fun TimelinePanel(
                 )
             }
 
-            // Time display badge
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(6.dp))
@@ -269,7 +268,7 @@ fun TimelinePanel(
                 }
             }
 
-            // Export Animation File Button
+            // REQUIREMENT 2: Export Animation File Button (Clean compact 28dp icon container)
             IconButton(
                 onClick = {
                     val name = "anim_${System.currentTimeMillis() % 10000}"
@@ -280,10 +279,10 @@ fun TimelinePanel(
                     .clip(RoundedCornerShape(6.dp))
                     .background(Color(0xFF334155))
             ) {
-                Icon(Icons.Default.FileDownload, contentDescription = "Export Animation File", tint = Color(0xFF38BDF8), modifier = Modifier.size(16.dp))
+                Icon(Icons.Default.FileDownload, contentDescription = "Export Animation", tint = Color(0xFF38BDF8), modifier = Modifier.size(16.dp))
             }
 
-            // Import Animation File Button
+            // REQUIREMENT 2: Import Animation File Button (Clean compact 28dp icon container)
             Box {
                 IconButton(
                     onClick = { importMenuOpen = true },
@@ -330,22 +329,20 @@ fun TimelinePanel(
 
         Spacer(modifier = Modifier.height(6.dp))
 
-        // 2. Scrollable Timeline Canvas (Both Horizontally and Vertically)
+        // 2. Scrollable Timeline Canvas
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(130.dp)
+                .height(if (isLandscape) 220.dp else 125.dp)
                 .clip(RoundedCornerShape(8.dp))
                 .background(Color(0xFF090D16))
                 .border(1.dp, Color(0xFF1E293B), RoundedCornerShape(8.dp))
         ) {
-            // Horizontal scroll container
             Row(
                 modifier = Modifier
                     .fillMaxSize()
                     .horizontalScroll(horizontalScroll)
             ) {
-                // Main Timeline Tracks container with vertical scroll
                 Column(
                     modifier = Modifier
                         .width(totalTimelineWidth + 60.dp)
@@ -365,7 +362,6 @@ fun TimelinePanel(
                                 }
                             }
                     ) {
-                        // Ruler tick marks
                         val totalSeconds = duration.toInt() + 1
                         for (s in 0..totalSeconds) {
                             val xPos = dpPerSecond * s
@@ -381,8 +377,7 @@ fun TimelinePanel(
                                 fontSize = 9.sp,
                                 fontFamily = FontFamily.Monospace,
                                 color = Color(0xFF94A3B8),
-                                modifier = Modifier
-                                    .offset(x = xPos + 2.dp, y = 2.dp)
+                                modifier = Modifier.offset(x = xPos + 2.dp, y = 2.dp)
                             )
                         }
                     }
@@ -399,7 +394,6 @@ fun TimelinePanel(
                                 }
                             }
                     ) {
-                        // Horizontal track row guidelines
                         for (r in 0..maxRow) {
                             Box(
                                 modifier = Modifier
@@ -410,7 +404,6 @@ fun TimelinePanel(
                             )
                         }
 
-                        // Render Action Blocks
                         blocks.forEach { block ->
                             val isBlockSelected = block.id == selectedBlockId
                             val blockColor = getActionBlockColor(block.type)
@@ -507,28 +500,11 @@ fun TimelinePanel(
                                             color = Color.White,
                                             maxLines = 1
                                         )
-
                                         if (block.hasCustomSettings) {
                                             Spacer(modifier = Modifier.width(2.dp))
-                                            Icon(
-                                                Icons.Default.Star,
-                                                contentDescription = "Custom settings",
-                                                tint = Color(0xFFFDE047),
-                                                modifier = Modifier.size(11.dp)
-                                            )
-                                        }
-
-                                        if (block.enablePositionMove) {
-                                            Spacer(modifier = Modifier.width(2.dp))
-                                            Icon(
-                                                Icons.Default.NearMe,
-                                                contentDescription = "Position movement enabled",
-                                                tint = Color(0xFF86EFAC),
-                                                modifier = Modifier.size(11.dp)
-                                            )
+                                            Icon(Icons.Default.Star, contentDescription = null, tint = Color(0xFFFDE047), modifier = Modifier.size(11.dp))
                                         }
                                     }
-
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text(
                                             "${String.format("%.1f", block.duration)}s",
@@ -544,19 +520,14 @@ fun TimelinePanel(
                                             },
                                             modifier = Modifier.size(20.dp)
                                         ) {
-                                            Icon(
-                                                Icons.Default.Settings,
-                                                contentDescription = "Settings",
-                                                tint = Color.White,
-                                                modifier = Modifier.size(12.dp)
-                                            )
+                                            Icon(Icons.Default.Settings, contentDescription = "Settings", tint = Color.White, modifier = Modifier.size(12.dp))
                                         }
                                     }
                                 }
                             }
                         }
 
-                        // Playhead Indicator Line
+                        // Playhead Line
                         val playheadX = dpPerSecond * currentTime
                         Box(
                             modifier = Modifier
@@ -570,7 +541,7 @@ fun TimelinePanel(
             }
         }
 
-        // 3. Selected Action Block Inspector & Quick Settings
+        // REQUIREMENT 2: Unified Horizontally Scrollable Action Inspector Container
         val activeBlock = blocks.firstOrNull { it.id == selectedBlockId }
         if (activeBlock != null) {
             Spacer(modifier = Modifier.height(6.dp))
@@ -582,161 +553,120 @@ fun TimelinePanel(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
                         .padding(horizontal = 10.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // Block name and icon
+                    // Block identity badge
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             getActionBlockIcon(activeBlock.type),
                             contentDescription = null,
                             tint = getActionBlockColor(activeBlock.type),
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(18.dp)
                         )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Column {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    "${activeBlock.type.displayName} Block",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 12.sp,
-                                    color = Color(0xFFF1F5F9)
-                                )
-                                if (activeBlock.hasCustomSettings) {
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        "Custom",
-                                        fontSize = 9.sp,
-                                        color = Color(0xFF2DD4BF),
-                                        modifier = Modifier
-                                            .background(Color(0xFF0F766E).copy(alpha = 0.3f), RoundedCornerShape(3.dp))
-                                            .padding(horizontal = 4.dp, vertical = 1.dp)
-                                    )
-                                }
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            activeBlock.type.displayName,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp,
+                            color = Color.White
+                        )
+                    }
+
+                    Box(modifier = Modifier.height(18.dp).width(1.dp).background(Color(0xFF475569)))
+
+                    // Quick Toggle Position Move
+                    IconButton(
+                        onClick = {
+                            activeBlock.enablePositionMove = !activeBlock.enablePositionMove
+                            onUpdateActionBlock(activeBlock)
+                        },
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(if (activeBlock.enablePositionMove) Color(0xFF15803D) else Color(0xFF334155))
+                    ) {
+                        Icon(
+                            if (activeBlock.enablePositionMove) Icons.Default.NearMe else Icons.Default.DirectionsWalk,
+                            contentDescription = "Toggle Move Position",
+                            tint = if (activeBlock.enablePositionMove) Color(0xFF86EFAC) else Color(0xFFCBD5E1),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+
+                    // Open Settings Dialog
+                    IconButton(
+                        onClick = { editingBlock = activeBlock },
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color(0xFF0284C7))
+                    ) {
+                        Icon(Icons.Default.Settings, contentDescription = "Settings", tint = Color.White, modifier = Modifier.size(16.dp))
+                    }
+
+                    // Row Up
+                    IconButton(
+                        onClick = {
+                            if (activeBlock.trackRow > 0) {
+                                activeBlock.trackRow -= 1
+                                onUpdateActionBlock(activeBlock)
                             }
-                            Text(
-                                "Start: ${String.format("%.1f", activeBlock.startTime)}s | Dur: ${String.format("%.1f", activeBlock.duration)}s | Step: ${String.format("%.1f", activeBlock.stepSize)}x",
-                                fontSize = 10.sp,
-                                color = Color(0xFF94A3B8)
-                            )
+                        },
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color(0xFF334155))
+                    ) {
+                        Icon(Icons.Default.ArrowUpward, contentDescription = "Row Up", tint = Color(0xFFCBD5E1), modifier = Modifier.size(16.dp))
+                    }
+
+                    // Row Down
+                    IconButton(
+                        onClick = {
+                            activeBlock.trackRow += 1
+                            onUpdateActionBlock(activeBlock)
+                        },
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color(0xFF334155))
+                    ) {
+                        Icon(Icons.Default.ArrowDownward, contentDescription = "Row Down", tint = Color(0xFFCBD5E1), modifier = Modifier.size(16.dp))
+                    }
+
+                    // Target Position Button
+                    if (activeBlock.type == ActionBlockType.SLIDE_TO_POS || activeBlock.type == ActionBlockType.MOVE_TO_POS) {
+                        IconButton(
+                            onClick = {
+                                if (selectedNodePosition != null) {
+                                    activeBlock.targetPosition = selectedNodePosition.copy()
+                                    onUpdateActionBlock(activeBlock)
+                                }
+                            },
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Color(0xFF10B981))
+                        ) {
+                            Icon(Icons.Default.GpsFixed, contentDescription = "Set Target", tint = Color.White, modifier = Modifier.size(16.dp))
                         }
                     }
 
-                    // Controls: purely compact icons in horizontally scrollable row to avoid hidden buttons
-                    Row(
+                    // Delete Block Button
+                    IconButton(
+                        onClick = {
+                            onRemoveActionBlock(activeBlock.id)
+                            selectedBlockId = null
+                        },
                         modifier = Modifier
-                            .weight(1f, fill = false)
-                            .horizontalScroll(rememberScrollState()),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            .size(28.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color(0xFFEF4444))
                     ) {
-                        // Quick toggle for enablePositionMove
-                        IconButton(
-                            onClick = {
-                                activeBlock.enablePositionMove = !activeBlock.enablePositionMove
-                                onUpdateActionBlock(activeBlock)
-                            },
-                            modifier = Modifier
-                                .size(28.dp)
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(if (activeBlock.enablePositionMove) Color(0xFF15803D) else Color(0xFF334155))
-                        ) {
-                            Icon(
-                                if (activeBlock.enablePositionMove) Icons.Default.NearMe else Icons.Default.DirectionsWalk,
-                                contentDescription = if (activeBlock.enablePositionMove) "Position Move ON" else "Position Move OFF",
-                                tint = if (activeBlock.enablePositionMove) Color(0xFF86EFAC) else Color(0xFFCBD5E1),
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-
-                        // Settings dialog button
-                        IconButton(
-                            onClick = { editingBlock = activeBlock },
-                            modifier = Modifier
-                                .size(28.dp)
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(Color(0xFF0284C7))
-                        ) {
-                            Icon(Icons.Default.Settings, contentDescription = "Settings", tint = Color.White, modifier = Modifier.size(16.dp))
-                        }
-
-                        // Move row up
-                        IconButton(
-                            onClick = {
-                                if (activeBlock.trackRow > 0) {
-                                    activeBlock.trackRow -= 1
-                                    onUpdateActionBlock(activeBlock)
-                                }
-                            },
-                            modifier = Modifier
-                                .size(28.dp)
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(Color(0xFF334155))
-                        ) {
-                            Icon(Icons.Default.ArrowUpward, contentDescription = "Move Row Up", tint = Color(0xFFCBD5E1), modifier = Modifier.size(16.dp))
-                        }
-
-                        // Move row down
-                        IconButton(
-                            onClick = {
-                                activeBlock.trackRow += 1
-                                onUpdateActionBlock(activeBlock)
-                            },
-                            modifier = Modifier
-                                .size(28.dp)
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(Color(0xFF334155))
-                        ) {
-                            Icon(Icons.Default.ArrowDownward, contentDescription = "Move Row Down", tint = Color(0xFFCBD5E1), modifier = Modifier.size(16.dp))
-                        }
-
-                        // Target pos button (for Slide / Move)
-                        if (activeBlock.type == ActionBlockType.SLIDE_TO_POS || activeBlock.type == ActionBlockType.MOVE_TO_POS) {
-                            IconButton(
-                                onClick = {
-                                    if (selectedNodePosition != null) {
-                                        activeBlock.targetPosition = selectedNodePosition.copy()
-                                        onUpdateActionBlock(activeBlock)
-                                    }
-                                },
-                                modifier = Modifier
-                                    .size(28.dp)
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(Color(0xFF10B981))
-                            ) {
-                                Icon(Icons.Default.GpsFixed, contentDescription = "Set Target to Current Position", tint = Color.White, modifier = Modifier.size(16.dp))
-                            }
-                        }
-
-                        // Target scale button (for SCALE)
-                        if (activeBlock.type == ActionBlockType.SCALE) {
-                            IconButton(
-                                onClick = {
-                                    onUpdateActionBlock(activeBlock)
-                                },
-                                modifier = Modifier
-                                    .size(28.dp)
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(Color(0xFFEC4899))
-                            ) {
-                                Icon(Icons.Default.AspectRatio, contentDescription = "Scale Settings", tint = Color.White, modifier = Modifier.size(16.dp))
-                            }
-                        }
-
-                        // Delete Block
-                        IconButton(
-                            onClick = {
-                                onRemoveActionBlock(activeBlock.id)
-                                selectedBlockId = null
-                            },
-                            modifier = Modifier
-                                .size(28.dp)
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(Color(0xFFEF4444))
-                        ) {
-                            Icon(Icons.Default.Delete, contentDescription = "Delete Block", tint = Color.White, modifier = Modifier.size(16.dp))
-                        }
+                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color.White, modifier = Modifier.size(16.dp))
                     }
                 }
             }

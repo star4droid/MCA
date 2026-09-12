@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.star4droid.mc.animation.animation.ActionBlock
+import com.star4droid.mc.animation.animation.ActionBlockType
 import com.star4droid.mc.animation.engine.math.Vec3
 
 @Composable
@@ -37,6 +38,10 @@ fun ActionBlockSettingsDialog(
     var vecX by remember { mutableStateOf(block.moveVector.x) }
     var vecY by remember { mutableStateOf(block.moveVector.y) }
     var vecZ by remember { mutableStateOf(block.moveVector.z) }
+    var targetScaleX by remember { mutableStateOf(block.scaleVector.x) }
+    var targetScaleY by remember { mutableStateOf(block.scaleVector.y) }
+    var targetScaleZ by remember { mutableStateOf(block.scaleVector.z) }
+    var clipFileName by remember { mutableStateOf(block.clipFileName ?: "Walk Cycle") }
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
@@ -60,9 +65,9 @@ fun ActionBlockSettingsDialog(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            imageVector = Icons.Default.DirectionsWalk,
+                            imageVector = getActionBlockIcon(block.type),
                             contentDescription = null,
-                            tint = Color(0xFF38BDF8),
+                            tint = getActionBlockColor(block.type),
                             modifier = Modifier.size(24.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
@@ -86,205 +91,193 @@ fun ActionBlockSettingsDialog(
                     }
                 }
 
-                // Custom settings status pill
-                Spacer(modifier = Modifier.height(10.dp))
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(
-                            if (block.hasCustomSettings) Color(0xFF0F766E).copy(alpha = 0.35f)
-                            else Color(0xFF334155).copy(alpha = 0.5f),
-                            RoundedCornerShape(6.dp)
-                        )
-                        .padding(horizontal = 10.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        if (block.hasCustomSettings) Icons.Default.Star else Icons.Default.Public,
-                        contentDescription = null,
-                        tint = if (block.hasCustomSettings) Color(0xFF2DD4BF) else Color(0xFF94A3B8),
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        if (block.hasCustomSettings) "Custom Block Settings (Protected from Apply to All)"
-                        else "Default Global Settings",
-                        fontSize = 11.sp,
-                        color = if (block.hasCustomSettings) Color(0xFF2DD4BF) else Color(0xFFCBD5E1)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // Toggle: Enable Position Move
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
-                    shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = if (enablePositionMove) Icons.Default.NearMe else Icons.Default.DirectionsWalk,
-                                    contentDescription = null,
-                                    tint = if (enablePositionMove) Color(0xFF22C55E) else Color(0xFFE2E8F0),
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    "Move Position",
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 13.sp,
-                                    color = Color.White
-                                )
-                            }
-                            Text(
-                                if (enablePositionMove)
-                                    "Character travels forward in 3D space while playing walk animation"
-                                else
-                                    "Character animates limbs (hands & legs) in-place without moving position",
-                                fontSize = 11.sp,
-                                color = Color(0xFF94A3B8),
-                                modifier = Modifier.padding(top = 2.dp)
-                            )
-                        }
-
-                        Switch(
-                            checked = enablePositionMove,
-                            onCheckedChange = { enablePositionMove = it },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = Color.White,
-                                checkedTrackColor = Color(0xFF22C55E),
-                                uncheckedThumbColor = Color(0xFF64748B),
-                                uncheckedTrackColor = Color(0xFF334155)
-                            )
-                        )
-                    }
-                }
-
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Block Duration
+                // Common Property: Duration
                 Text(
-                    text = "Duration: ${String.format("%.1f", duration)}s (Loops walk cycle until end)",
+                    text = "Duration: ${String.format("%.1f", duration)}s",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = Color(0xFFE2E8F0)
                 )
                 Slider(
                     value = duration,
-                    onValueChange = { duration = (Math.round(it * 10f) / 10f).coerceIn(0.5f, 20f) },
-                    valueRange = 0.5f..20f,
+                    onValueChange = { duration = (Math.round(it * 10f) / 10f).coerceIn(0.2f, 30f) },
+                    valueRange = 0.2f..30f,
                     colors = SliderDefaults.colors(
                         thumbColor = Color(0xFF38BDF8),
                         activeTrackColor = Color(0xFF0284C7)
                     )
                 )
 
-                // Step Size / Stride Amplitude
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = "Limb Swing Amplitude (Step Size): ${String.format("%.2f", stepSize)}x",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color(0xFFE2E8F0)
-                )
-                Slider(
-                    value = stepSize,
-                    onValueChange = { stepSize = (Math.round(it * 100f) / 100f).coerceIn(0.2f, 3.0f) },
-                    valueRange = 0.2f..3.0f,
-                    colors = SliderDefaults.colors(
-                        thumbColor = Color(0xFFF59E0B),
-                        activeTrackColor = Color(0xFFD97706)
-                    )
-                )
+                // BLOCK-SPECIFIC PROPERTIES
+                when (block.type) {
+                    ActionBlockType.WALK, ActionBlockType.RUN -> {
+                        // Position Move Toggle
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("Move Position in 3D", fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = Color.White)
+                                    Text("Translate character forward during limb animation", fontSize = 10.sp, color = Color(0xFF94A3B8))
+                                }
+                                Switch(
+                                    checked = enablePositionMove,
+                                    onCheckedChange = { enablePositionMove = it },
+                                    colors = SwitchDefaults.colors(checkedTrackColor = Color(0xFF22C55E))
+                                )
+                            }
+                        }
 
-                // Animation Speed Multiplier
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = "Walk Cadence Speed: ${String.format("%.2f", speed)}x",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color(0xFFE2E8F0)
-                )
-                Slider(
-                    value = speed,
-                    onValueChange = { speed = (Math.round(it * 100f) / 100f).coerceIn(0.25f, 3.0f) },
-                    valueRange = 0.25f..3.0f,
-                    colors = SliderDefaults.colors(
-                        thumbColor = Color(0xFFA855F7),
-                        activeTrackColor = Color(0xFF7C3AED)
-                    )
-                )
+                        Spacer(modifier = Modifier.height(8.dp))
 
-                // Walk Vector Displacement (Visible when Position Move is Enabled)
-                if (enablePositionMove) {
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Text(
-                        "Displacement Vector (Distance traveled):",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFFE2E8F0)
-                    )
-
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        VectorAdjuster(
-                            label = "X",
-                            value = vecX,
-                            color = Color(0xFFEF4444),
-                            onValueChange = { vecX = it },
-                            modifier = Modifier.weight(1f)
+                        Text("Limb Swing Amplitude (Step Size): ${String.format("%.2f", stepSize)}x", fontSize = 12.sp, color = Color(0xFFE2E8F0))
+                        Slider(
+                            value = stepSize,
+                            onValueChange = { stepSize = (Math.round(it * 100f) / 100f).coerceIn(0.1f, 3.0f) },
+                            valueRange = 0.1f..3.0f,
+                            colors = SliderDefaults.colors(thumbColor = Color(0xFFF59E0B), activeTrackColor = Color(0xFFD97706))
                         )
-                        VectorAdjuster(
-                            label = "Y",
-                            value = vecY,
-                            color = Color(0xFF22C55E),
-                            onValueChange = { vecY = it },
-                            modifier = Modifier.weight(1f)
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        Text("Cadence Speed Multiplier: ${String.format("%.2f", speed)}x", fontSize = 12.sp, color = Color(0xFFE2E8F0))
+                        Slider(
+                            value = speed,
+                            onValueChange = { speed = (Math.round(it * 100f) / 100f).coerceIn(0.25f, 4.0f) },
+                            valueRange = 0.25f..4.0f,
+                            colors = SliderDefaults.colors(thumbColor = Color(0xFFA855F7), activeTrackColor = Color(0xFF7C3AED))
                         )
-                        VectorAdjuster(
-                            label = "Z",
-                            value = vecZ,
-                            color = Color(0xFF3B82F6),
-                            onValueChange = { vecZ = it },
-                            modifier = Modifier.weight(1f)
+
+                        if (enablePositionMove) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text("Displacement Distance Vector:", fontSize = 11.sp, color = Color(0xFF94A3B8))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                VectorAdjuster("X", vecX, Color(0xFFEF4444), { vecX = it }, Modifier.weight(1f))
+                                VectorAdjuster("Y", vecY, Color(0xFF22C55E), { vecY = it }, Modifier.weight(1f))
+                                VectorAdjuster("Z", vecZ, Color(0xFF3B82F6), { vecZ = it }, Modifier.weight(1f))
+                            }
+                        }
+                    }
+
+                    ActionBlockType.JUMP -> {
+                        Text("Jump Height Multiplier: ${String.format("%.2f", stepSize)}x", fontSize = 12.sp, color = Color(0xFFE2E8F0))
+                        Slider(
+                            value = stepSize,
+                            onValueChange = { stepSize = (Math.round(it * 100f) / 100f).coerceIn(0.2f, 4.0f) },
+                            valueRange = 0.2f..4.0f,
+                            colors = SliderDefaults.colors(thumbColor = Color(0xFF0EA5E9), activeTrackColor = Color(0xFF0284C7))
                         )
                     }
 
-                    // Direction Presets
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        PresetChip("Forward (+Z)", onClick = { vecX = 0f; vecY = 0f; vecZ = 3f }, modifier = Modifier.weight(1f))
-                        PresetChip("Backward (-Z)", onClick = { vecX = 0f; vecY = 0f; vecZ = -3f }, modifier = Modifier.weight(1f))
-                        PresetChip("Left (-X)", onClick = { vecX = -3f; vecY = 0f; vecZ = 0f }, modifier = Modifier.weight(1f))
-                        PresetChip("Right (+X)", onClick = { vecX = 3f; vecY = 0f; vecZ = 0f }, modifier = Modifier.weight(1f))
+                    ActionBlockType.WAVE -> {
+                        Text("Wave Hand Cadence Speed: ${String.format("%.2f", speed)}x", fontSize = 12.sp, color = Color(0xFFE2E8F0))
+                        Slider(
+                            value = speed,
+                            onValueChange = { speed = (Math.round(it * 100f) / 100f).coerceIn(0.2f, 3.0f) },
+                            valueRange = 0.2f..3.0f,
+                            colors = SliderDefaults.colors(thumbColor = Color(0xFF8B5CF6), activeTrackColor = Color(0xFF7C3AED))
+                        )
+                    }
+
+                    ActionBlockType.SLIDE_TO_POS, ActionBlockType.MOVE_TO_POS -> {
+                        Text("Target Position Offset:", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFE2E8F0))
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            VectorAdjuster("X", vecX, Color(0xFFEF4444), { vecX = it }, Modifier.weight(1f))
+                            VectorAdjuster("Y", vecY, Color(0xFF22C55E), { vecY = it }, Modifier.weight(1f))
+                            VectorAdjuster("Z", vecZ, Color(0xFF3B82F6), { vecZ = it }, Modifier.weight(1f))
+                        }
+                    }
+
+                    ActionBlockType.SCALE -> {
+                        Text("Target Scale Vector:", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFE2E8F0))
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            VectorAdjuster("Scale X", targetScaleX, Color(0xFFEF4444), { targetScaleX = it.coerceAtLeast(0.05f) }, Modifier.weight(1f))
+                            VectorAdjuster("Scale Y", targetScaleY, Color(0xFF22C55E), { targetScaleY = it.coerceAtLeast(0.05f) }, Modifier.weight(1f))
+                            VectorAdjuster("Scale Z", targetScaleZ, Color(0xFF3B82F6), { targetScaleZ = it.coerceAtLeast(0.05f) }, Modifier.weight(1f))
+                        }
+                    }
+
+                    ActionBlockType.ANIMATION_CLIP -> {
+                        Text("Animation Clip Preset:", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFE2E8F0))
+                        Spacer(modifier = Modifier.height(4.dp))
+                        val clipOptions = listOf("Walk Cycle", "Run Sprint", "Wave Gesture", "Idle Motion", "Combat Attack")
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            clipOptions.take(3).forEach { clipName ->
+                                val isSel = clipFileName == clipName
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(if (isSel) Color(0xFFA855F7) else Color(0xFF334155))
+                                        .clickable { clipFileName = clipName }
+                                        .padding(vertical = 6.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(clipName, fontSize = 10.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Text("Clip Playback Speed: ${String.format("%.2f", speed)}x", fontSize = 12.sp, color = Color(0xFFE2E8F0))
+                        Slider(
+                            value = speed,
+                            onValueChange = { speed = (Math.round(it * 100f) / 100f).coerceIn(0.2f, 4.0f) },
+                            valueRange = 0.2f..4.0f,
+                            colors = SliderDefaults.colors(thumbColor = Color(0xFFA855F7), activeTrackColor = Color(0xFF7C3AED))
+                        )
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        Text("Limb Motion Amplitude: ${String.format("%.2f", stepSize)}x", fontSize = 12.sp, color = Color(0xFFE2E8F0))
+                        Slider(
+                            value = stepSize,
+                            onValueChange = { stepSize = (Math.round(it * 100f) / 100f).coerceIn(0.1f, 3.0f) },
+                            valueRange = 0.1f..3.0f,
+                            colors = SliderDefaults.colors(thumbColor = Color(0xFF38BDF8), activeTrackColor = Color(0xFF0284C7))
+                        )
                     }
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Action Buttons
-                val currentUpdatedBlock = remember(duration, enablePositionMove, stepSize, speed, vecX, vecY, vecZ) {
+                val currentUpdatedBlock = remember(
+                    duration, enablePositionMove, stepSize, speed,
+                    vecX, vecY, vecZ, targetScaleX, targetScaleY, targetScaleZ, clipFileName
+                ) {
                     block.copy(
                         duration = duration,
                         enablePositionMove = enablePositionMove,
                         stepSize = stepSize,
                         speed = speed,
-                        moveVector = Vec3(vecX, vecY, vecZ)
+                        moveVector = Vec3(vecX, vecY, vecZ),
+                        scaleVector = Vec3(targetScaleX, targetScaleY, targetScaleZ),
+                        clipFileName = clipFileName
                     )
                 }
 
@@ -318,23 +311,6 @@ fun ActionBlockSettingsDialog(
                         Icon(Icons.Default.DoneAll, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(4.dp))
                         Text("Apply to All", fontSize = 12.sp)
-                    }
-                }
-
-                if (block.hasCustomSettings) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedButton(
-                        onClick = {
-                            onRemoveCustom(block.id)
-                            onDismiss()
-                        },
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFF87171)),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(Icons.Default.DeleteSweep, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Remove Custom Settings (Revert to Global)", fontSize = 11.sp)
                     }
                 }
             }
@@ -386,27 +362,5 @@ private fun VectorAdjuster(
                 Text("+", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
             }
         }
-    }
-}
-
-@Composable
-private fun PresetChip(
-    text: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(6.dp),
-        color = Color(0xFF334155),
-        modifier = modifier
-    ) {
-        Text(
-            text = text,
-            fontSize = 9.sp,
-            color = Color(0xFFCBD5E1),
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(vertical = 6.dp, horizontal = 2.dp)
-        )
     }
 }

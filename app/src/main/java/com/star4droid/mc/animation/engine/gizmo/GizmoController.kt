@@ -38,25 +38,31 @@ class GizmoController(
     private var dragStartPlanePoint: Vec3? = null
 
     fun checkAxisHit(ray: Ray, gizmoPosition: Vec3, gizmoScale: Float = 1.0f): GizmoAxis {
-        val axisLength = 1.5f * gizmoScale
-        val threshold = 0.35f * gizmoScale
+        val axisLength = 1.65f * gizmoScale
+        val threshold = 0.52f * gizmoScale
 
         // Center sphere
         if (ray.distanceToPoint(gizmoPosition) < threshold) {
             return GizmoAxis.CENTER
         }
 
-        // X axis (along (1, 0, 0))
-        val xDist = ray.distanceToSegment(gizmoPosition, gizmoPosition + Vec3(axisLength, 0f, 0f))
-        if (xDist < threshold) return GizmoAxis.X
+        val tipX = gizmoPosition + Vec3(axisLength, 0f, 0f)
+        val tipY = gizmoPosition + Vec3(0f, axisLength, 0f)
+        val tipZ = gizmoPosition + Vec3(0f, 0f, axisLength)
 
-        // Y axis (along (0, 1, 0))
-        val yDist = ray.distanceToSegment(gizmoPosition, gizmoPosition + Vec3(0f, axisLength, 0f))
-        if (yDist < threshold) return GizmoAxis.Y
+        // Tip sphere checks (touch on outer ends)
+        if (ray.distanceToPoint(tipX) < threshold) return GizmoAxis.X
+        if (ray.distanceToPoint(tipY) < threshold) return GizmoAxis.Y
+        if (ray.distanceToPoint(tipZ) < threshold) return GizmoAxis.Z
 
-        // Z axis (along (0, 0, 1))
-        val zDist = ray.distanceToSegment(gizmoPosition, gizmoPosition + Vec3(0f, 0f, axisLength))
-        if (zDist < threshold) return GizmoAxis.Z
+        // X axis segment
+        if (ray.distanceToSegment(gizmoPosition, tipX) < threshold) return GizmoAxis.X
+
+        // Y axis segment
+        if (ray.distanceToSegment(gizmoPosition, tipY) < threshold) return GizmoAxis.Y
+
+        // Z axis segment
+        if (ray.distanceToSegment(gizmoPosition, tipZ) < threshold) return GizmoAxis.Z
 
         return GizmoAxis.NONE
     }
@@ -196,32 +202,32 @@ class GizmoController(
                     }
                     val uniformFactor = (1.0f + s * 0.8f).coerceAtLeast(0.05f)
                     Vec3(
-                        (initT.scale.x * uniformFactor).coerceIn(0.05f, 20f),
-                        (initT.scale.y * uniformFactor).coerceIn(0.05f, 20f),
-                        (initT.scale.z * uniformFactor).coerceIn(0.05f, 20f)
+                        (initT.scale.x * uniformFactor).coerceAtLeast(0.05f),
+                        (initT.scale.y * uniformFactor).coerceAtLeast(0.05f),
+                        (initT.scale.z * uniformFactor).coerceAtLeast(0.05f)
                     )
                 } else {
                     // For blocks, props, cubes: support precise per-axis scaling and center uniform scaling
                     when (activeAxis) {
                         GizmoAxis.X -> {
                             val factor = (1.0f + delta.x * 0.8f).coerceAtLeast(0.05f)
-                            initT.scale.copy(x = (initT.scale.x * factor).coerceIn(0.05f, 20f))
+                            initT.scale.copy(x = (initT.scale.x * factor).coerceAtLeast(0.05f))
                         }
                         GizmoAxis.Y -> {
                             val factor = (1.0f + delta.y * 0.8f).coerceAtLeast(0.05f)
-                            initT.scale.copy(y = (initT.scale.y * factor).coerceIn(0.05f, 20f))
+                            initT.scale.copy(y = (initT.scale.y * factor).coerceAtLeast(0.05f))
                         }
                         GizmoAxis.Z -> {
                             val factor = (1.0f + delta.z * 0.8f).coerceAtLeast(0.05f)
-                            initT.scale.copy(z = (initT.scale.z * factor).coerceIn(0.05f, 20f))
+                            initT.scale.copy(z = (initT.scale.z * factor).coerceAtLeast(0.05f))
                         }
                         GizmoAxis.CENTER -> {
                             val s = (delta.x + delta.y + delta.z) * 0.5f
                             val factor = (1.0f + s * 0.8f).coerceAtLeast(0.05f)
                             Vec3(
-                                (initT.scale.x * factor).coerceIn(0.05f, 20f),
-                                (initT.scale.y * factor).coerceIn(0.05f, 20f),
-                                (initT.scale.z * factor).coerceIn(0.05f, 20f)
+                                (initT.scale.x * factor).coerceAtLeast(0.05f),
+                                (initT.scale.y * factor).coerceAtLeast(0.05f),
+                                (initT.scale.z * factor).coerceAtLeast(0.05f)
                             )
                         }
                         else -> initT.scale

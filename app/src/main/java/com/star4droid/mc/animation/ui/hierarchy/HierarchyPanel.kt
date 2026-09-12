@@ -133,6 +133,7 @@ fun HierarchyNodeItem(
         SceneNodeType.CAMERA -> "🎥"
         SceneNodeType.LIGHT -> "☀️"
         SceneNodeType.GROUND -> "🟩"
+        SceneNodeType.PLANE -> "🗺️"
         SceneNodeType.GROUP -> "📁"
     }
 

@@ -20,18 +20,17 @@ object CharacterFactory {
         val rootId = UUID.randomUUID().toString()
         val bodyId = UUID.randomUUID().toString()
         val headId = UUID.randomUUID().toString()
-        val leftArmId = UUID.randomUUID().toString()
         val rightArmId = UUID.randomUUID().toString()
-        val leftLegId = UUID.randomUUID().toString()
+        val rightForearmId = UUID.randomUUID().toString()
+        val leftArmId = UUID.randomUUID().toString()
+        val leftForearmId = UUID.randomUUID().toString()
         val rightLegId = UUID.randomUUID().toString()
+        val rightLowerLegId = UUID.randomUUID().toString()
+        val leftLegId = UUID.randomUUID().toString()
+        val leftLowerLegId = UUID.randomUUID().toString()
 
         val armWidth = if (isAlex) 0.2f else 0.25f
         val shoulderOffset = if (isAlex) 0.325f else 0.375f
-
-        // Total height = 2.0 blocks
-        // Leg: 0.75 height (from y = 0 to 0.75) -> center at y = 0.375
-        // Body: 0.75 height (from y = 0.75 to 1.5) -> center at y = 1.125
-        // Head: 0.5 height (from y = 1.5 to 2.0) -> center at y = 1.75
 
         // Root node
         val rootNode = SceneNode(
@@ -65,8 +64,7 @@ object CharacterFactory {
             characterSkinId = skinId
         )
 
-        // Head Node (attached to body at neck: neck is top of body y = 1.5, which is +0.375 from body center)
-        // Head center is 0.25 above neck.
+        // Head Node
         val headNode = SceneNode(
             id = headId,
             name = "$name Head",
@@ -75,7 +73,7 @@ object CharacterFactory {
             children = mutableListOf(),
             baseTransform = Transform(
                 position = Vec3(0f, 0.625f, 0f),
-                pivot = Vec3(0f, -0.25f, 0f) // Pivot at neck base
+                pivot = Vec3(0f, -0.25f, 0f)
             ),
             animatedTransform = Transform(
                 position = Vec3(0f, 0.625f, 0f),
@@ -87,92 +85,181 @@ object CharacterFactory {
             characterSkinId = skinId
         )
 
-        // Right Arm (Character's right is -X in viewer perspective or +X depending on convention)
-        // Hinge at top shoulder
+        // Right Upper Arm
         val rightArmNode = SceneNode(
             id = rightArmId,
             name = "$name Right Arm",
             type = SceneNodeType.CHARACTER_PART,
             parentId = bodyId,
-            children = mutableListOf(),
+            children = mutableListOf(rightForearmId),
             baseTransform = Transform(
-                position = Vec3(-shoulderOffset, 0f, 0f),
-                pivot = Vec3(0f, 0.375f, 0f) // Pivot at top shoulder
+                position = Vec3(-shoulderOffset, 0.1875f, 0f),
+                pivot = Vec3(0f, 0.1875f, 0f)
             ),
             animatedTransform = Transform(
-                position = Vec3(-shoulderOffset, 0f, 0f),
-                pivot = Vec3(0f, 0.375f, 0f)
+                position = Vec3(-shoulderOffset, 0.1875f, 0f),
+                pivot = Vec3(0f, 0.1875f, 0f)
             ),
             material = Material(textureAssetId = "${skinId}_arm_right", color = 0xFFFFFFFF.toInt()),
             characterPartType = CharacterPartType.RIGHT_ARM,
-            boxDimensions = Vec3(armWidth, 0.75f, 0.25f),
+            boxDimensions = Vec3(armWidth, 0.375f, 0.25f),
             characterSkinId = skinId
         )
 
-        // Left Arm
+        // Right Forearm / Hand (Elbow joint bending)
+        val rightForearmNode = SceneNode(
+            id = rightForearmId,
+            name = "$name Right Forearm",
+            type = SceneNodeType.CHARACTER_PART,
+            parentId = rightArmId,
+            children = mutableListOf(),
+            baseTransform = Transform(
+                position = Vec3(0f, -0.375f, 0f),
+                pivot = Vec3(0f, 0.1875f, 0f)
+            ),
+            animatedTransform = Transform(
+                position = Vec3(0f, -0.375f, 0f),
+                pivot = Vec3(0f, 0.1875f, 0f)
+            ),
+            material = Material(textureAssetId = "${skinId}_arm_right", color = 0xFFFFFFFF.toInt()),
+            characterPartType = CharacterPartType.RIGHT_FOREARM,
+            boxDimensions = Vec3(armWidth * 0.95f, 0.375f, 0.24f),
+            characterSkinId = skinId
+        )
+
+        // Left Upper Arm
         val leftArmNode = SceneNode(
             id = leftArmId,
             name = "$name Left Arm",
             type = SceneNodeType.CHARACTER_PART,
             parentId = bodyId,
-            children = mutableListOf(),
+            children = mutableListOf(leftForearmId),
             baseTransform = Transform(
-                position = Vec3(shoulderOffset, 0f, 0f),
-                pivot = Vec3(0f, 0.375f, 0f) // Pivot at top shoulder
+                position = Vec3(shoulderOffset, 0.1875f, 0f),
+                pivot = Vec3(0f, 0.1875f, 0f)
             ),
             animatedTransform = Transform(
-                position = Vec3(shoulderOffset, 0f, 0f),
-                pivot = Vec3(0f, 0.375f, 0f)
+                position = Vec3(shoulderOffset, 0.1875f, 0f),
+                pivot = Vec3(0f, 0.1875f, 0f)
             ),
             material = Material(textureAssetId = "${skinId}_arm_left", color = 0xFFFFFFFF.toInt()),
             characterPartType = CharacterPartType.LEFT_ARM,
-            boxDimensions = Vec3(armWidth, 0.75f, 0.25f),
+            boxDimensions = Vec3(armWidth, 0.375f, 0.25f),
             characterSkinId = skinId
         )
 
-        // Right Leg (attached to root, center at y = 0.375)
-        val rightLegNode = SceneNode(
-            id = rightLegId,
-            name = "$name Right Leg",
+        // Left Forearm / Hand (Elbow joint bending)
+        val leftForearmNode = SceneNode(
+            id = leftForearmId,
+            name = "$name Left Forearm",
             type = SceneNodeType.CHARACTER_PART,
-            parentId = rootId,
+            parentId = leftArmId,
             children = mutableListOf(),
             baseTransform = Transform(
-                position = Vec3(-0.125f, 0.375f, 0f),
-                pivot = Vec3(0f, 0.375f, 0f) // Pivot at hip
+                position = Vec3(0f, -0.375f, 0f),
+                pivot = Vec3(0f, 0.1875f, 0f)
             ),
             animatedTransform = Transform(
-                position = Vec3(-0.125f, 0.375f, 0f),
-                pivot = Vec3(0f, 0.375f, 0f)
+                position = Vec3(0f, -0.375f, 0f),
+                pivot = Vec3(0f, 0.1875f, 0f)
+            ),
+            material = Material(textureAssetId = "${skinId}_arm_left", color = 0xFFFFFFFF.toInt()),
+            characterPartType = CharacterPartType.LEFT_FOREARM,
+            boxDimensions = Vec3(armWidth * 0.95f, 0.375f, 0.24f),
+            characterSkinId = skinId
+        )
+
+        // Right Upper Leg
+        val rightLegNode = SceneNode(
+            id = rightLegId,
+            name = "$name Right Thigh",
+            type = SceneNodeType.CHARACTER_PART,
+            parentId = rootId,
+            children = mutableListOf(rightLowerLegId),
+            baseTransform = Transform(
+                position = Vec3(-0.125f, 0.5625f, 0f),
+                pivot = Vec3(0f, 0.1875f, 0f)
+            ),
+            animatedTransform = Transform(
+                position = Vec3(-0.125f, 0.5625f, 0f),
+                pivot = Vec3(0f, 0.1875f, 0f)
             ),
             material = Material(textureAssetId = "${skinId}_leg_right", color = 0xFFFFFFFF.toInt()),
             characterPartType = CharacterPartType.RIGHT_LEG,
-            boxDimensions = Vec3(0.25f, 0.75f, 0.25f),
+            boxDimensions = Vec3(0.25f, 0.375f, 0.25f),
             characterSkinId = skinId
         )
 
-        // Left Leg
-        val leftLegNode = SceneNode(
-            id = leftLegId,
-            name = "$name Left Leg",
+        // Right Lower Leg / Foot (Knee joint bending)
+        val rightLowerLegNode = SceneNode(
+            id = rightLowerLegId,
+            name = "$name Right Calf",
             type = SceneNodeType.CHARACTER_PART,
-            parentId = rootId,
+            parentId = rightLegId,
             children = mutableListOf(),
             baseTransform = Transform(
-                position = Vec3(0.125f, 0.375f, 0f),
-                pivot = Vec3(0f, 0.375f, 0f) // Pivot at hip
+                position = Vec3(0f, -0.375f, 0f),
+                pivot = Vec3(0f, 0.1875f, 0f)
             ),
             animatedTransform = Transform(
-                position = Vec3(0.125f, 0.375f, 0f),
-                pivot = Vec3(0f, 0.375f, 0f)
+                position = Vec3(0f, -0.375f, 0f),
+                pivot = Vec3(0f, 0.1875f, 0f)
+            ),
+            material = Material(textureAssetId = "${skinId}_leg_right", color = 0xFFFFFFFF.toInt()),
+            characterPartType = CharacterPartType.RIGHT_LOWER_LEG,
+            boxDimensions = Vec3(0.24f, 0.375f, 0.24f),
+            characterSkinId = skinId
+        )
+
+        // Left Upper Leg
+        val leftLegNode = SceneNode(
+            id = leftLegId,
+            name = "$name Left Thigh",
+            type = SceneNodeType.CHARACTER_PART,
+            parentId = rootId,
+            children = mutableListOf(leftLowerLegId),
+            baseTransform = Transform(
+                position = Vec3(0.125f, 0.5625f, 0f),
+                pivot = Vec3(0f, 0.1875f, 0f)
+            ),
+            animatedTransform = Transform(
+                position = Vec3(0.125f, 0.5625f, 0f),
+                pivot = Vec3(0f, 0.1875f, 0f)
             ),
             material = Material(textureAssetId = "${skinId}_leg_left", color = 0xFFFFFFFF.toInt()),
             characterPartType = CharacterPartType.LEFT_LEG,
-            boxDimensions = Vec3(0.25f, 0.75f, 0.25f),
+            boxDimensions = Vec3(0.25f, 0.375f, 0.25f),
             characterSkinId = skinId
         )
 
-        return listOf(rootNode, bodyNode, headNode, rightArmNode, leftArmNode, rightLegNode, leftLegNode)
+        // Left Lower Leg / Foot (Knee joint bending)
+        val leftLowerLegNode = SceneNode(
+            id = leftLowerLegId,
+            name = "$name Left Calf",
+            type = SceneNodeType.CHARACTER_PART,
+            parentId = leftLegId,
+            children = mutableListOf(),
+            baseTransform = Transform(
+                position = Vec3(0f, -0.375f, 0f),
+                pivot = Vec3(0f, 0.1875f, 0f)
+            ),
+            animatedTransform = Transform(
+                position = Vec3(0f, -0.375f, 0f),
+                pivot = Vec3(0f, 0.1875f, 0f)
+            ),
+            material = Material(textureAssetId = "${skinId}_leg_left", color = 0xFFFFFFFF.toInt()),
+            characterPartType = CharacterPartType.LEFT_LOWER_LEG,
+            boxDimensions = Vec3(0.24f, 0.375f, 0.24f),
+            characterSkinId = skinId
+        )
+
+        return listOf(
+            rootNode, bodyNode, headNode,
+            rightArmNode, rightForearmNode,
+            leftArmNode, leftForearmNode,
+            rightLegNode, rightLowerLegNode,
+            leftLegNode, leftLowerLegNode
+        )
     }
 
     fun addCharacterToScene(
@@ -193,3 +280,4 @@ object CharacterFactory {
         return parts.first().id
     }
 }
+

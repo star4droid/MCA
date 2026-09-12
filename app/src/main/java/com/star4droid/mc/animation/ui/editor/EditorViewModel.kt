@@ -591,6 +591,25 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         addBlockAt(spawnPos, textureId)
     }
 
+    fun addPlane(textureId: String = "grass") {
+        val spawnPos = camera.target + Vec3(0f, 0.05f, 0f)
+        val id = UUID.randomUUID().toString()
+        val node = SceneNode(
+            id = id,
+            name = "Plane ${sceneGraph.nodes.values.count { it.type == SceneNodeType.PLANE } + 1}",
+            type = SceneNodeType.PLANE,
+            baseTransform = Transform(position = spawnPos),
+            animatedTransform = Transform(position = spawnPos),
+            material = Material(textureAssetId = textureId),
+            boxDimensions = Vec3(1.5f, 0.01f, 1.5f)
+        )
+        historyManager.executeCommand(AddNodeCommand(sceneGraph, node, null))
+        selectNode(node.id)
+        SoundPlayer.playSound(SoundPlayer.SoundType.STEP)
+        updateHistoryState()
+        saveProject()
+    }
+
     fun addCharacter(isAlex: Boolean = false, skinId: String = if (isAlex) "alex" else "steve") {
         val name = when (skinId) {
             "alex" -> "Alex"
@@ -631,20 +650,32 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         updateHistoryState()
     }
 
-    fun addLight() {
+    fun addLight(lightType: com.star4droid.mc.animation.engine.scene.LightType = com.star4droid.mc.animation.engine.scene.LightType.POINT) {
         val id = UUID.randomUUID().toString()
+        val count = sceneGraph.nodes.values.count { it.type == SceneNodeType.LIGHT } + 1
+        val lightName = when (lightType) {
+            com.star4droid.mc.animation.engine.scene.LightType.SUN -> "Sun Light $count"
+            com.star4droid.mc.animation.engine.scene.LightType.POINT -> "Point Light $count"
+            com.star4droid.mc.animation.engine.scene.LightType.SPOT -> "Spot Light $count"
+        }
         val node = SceneNode(
             id = id,
-            name = "Sun ${sceneGraph.nodes.values.count { it.type == SceneNodeType.LIGHT } + 1}",
+            name = lightName,
             type = SceneNodeType.LIGHT,
-            baseTransform = Transform(position = camera.target + Vec3(3f, 6f, 3f)),
-            animatedTransform = Transform(position = camera.target + Vec3(3f, 6f, 3f)),
-            lightData = LightData()
+            baseTransform = Transform(position = camera.target + Vec3(2f, 4f, 2f)),
+            animatedTransform = Transform(position = camera.target + Vec3(2f, 4f, 2f)),
+            lightData = LightData(lightType = lightType)
         )
         historyManager.executeCommand(AddNodeCommand(sceneGraph, node, null))
         selectNode(node.id)
         SoundPlayer.playSound(SoundPlayer.SoundType.POP)
         updateHistoryState()
+    }
+
+    fun updateNodeLightData(nodeId: String, lightData: LightData) {
+        val node = sceneGraph.getNode(nodeId) ?: return
+        node.lightData = lightData.copy()
+        triggerRecomposition()
     }
 
     fun duplicateSelectedNode() {

@@ -3,6 +3,7 @@ package com.star4droid.mc.animation.ui.inspector
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,13 +25,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountTree
+import androidx.compose.material.icons.filled.Backspace
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.ViewInAr
+import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -38,7 +42,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -54,6 +57,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -62,6 +66,8 @@ import androidx.compose.ui.window.Dialog
 import com.star4droid.mc.animation.animation.presets.PresetType
 import com.star4droid.mc.animation.assets.BuiltInAssets
 import com.star4droid.mc.animation.engine.math.Vec3
+import com.star4droid.mc.animation.engine.scene.LightData
+import com.star4droid.mc.animation.engine.scene.LightType
 import com.star4droid.mc.animation.engine.scene.SceneNode
 import com.star4droid.mc.animation.engine.scene.SceneNodeType
 import com.star4droid.mc.animation.engine.scene.Transform
@@ -83,6 +89,12 @@ fun clampRotationForPart(partType: com.star4droid.mc.animation.engine.scene.Char
             1 -> value.coerceIn(-45f, 45f)
             else -> value.coerceIn(-15f, 135f)
         }
+        com.star4droid.mc.animation.engine.scene.CharacterPartType.RIGHT_FOREARM,
+        com.star4droid.mc.animation.engine.scene.CharacterPartType.LEFT_FOREARM -> when (axis) {
+            0 -> value.coerceIn(0f, 145f)
+            1 -> value.coerceIn(-25f, 25f)
+            else -> value.coerceIn(-25f, 25f)
+        }
         com.star4droid.mc.animation.engine.scene.CharacterPartType.RIGHT_LEG -> when (axis) {
             0 -> value.coerceIn(-85f, 80f)
             1 -> value.coerceIn(-25f, 25f)
@@ -92,6 +104,12 @@ fun clampRotationForPart(partType: com.star4droid.mc.animation.engine.scene.Char
             0 -> value.coerceIn(-85f, 80f)
             1 -> value.coerceIn(-25f, 25f)
             else -> value.coerceIn(-20f, 30f)
+        }
+        com.star4droid.mc.animation.engine.scene.CharacterPartType.RIGHT_LOWER_LEG,
+        com.star4droid.mc.animation.engine.scene.CharacterPartType.LEFT_LOWER_LEG -> when (axis) {
+            0 -> value.coerceIn(-135f, 0f)
+            1 -> value.coerceIn(-20f, 20f)
+            else -> value.coerceIn(-20f, 20f)
         }
         com.star4droid.mc.animation.engine.scene.CharacterPartType.BODY -> when (axis) {
             0 -> value.coerceIn(-35f, 35f)
@@ -118,6 +136,7 @@ fun InspectorPanel(
     onUpdateMaterial: (textureAssetId: String, opacity: Float) -> Unit,
     onClose: () -> Unit,
     onSelectNode: (String) -> Unit = {},
+    onUpdateLightData: ((LightData) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
@@ -145,7 +164,6 @@ fun InspectorPanel(
                     color = Color(0xFFE2E8F0)
                 )
                 Spacer(modifier = Modifier.width(6.dp))
-                // Lock Selection Button
                 IconButton(
                     onClick = onToggleSelectionLock,
                     modifier = Modifier.size(28.dp)
@@ -181,7 +199,7 @@ fun InspectorPanel(
                 .fillMaxSize()
                 .verticalScroll(scrollState)
         ) {
-            // Name Property & Type (with Rename Dialog trigger)
+            // Name Property & Type
             Card(
                 colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
                 shape = RoundedCornerShape(8.dp),
@@ -225,7 +243,7 @@ fun InspectorPanel(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Parent Property (with Scrollable Tree / List selection)
+            // Parent Property
             val parentNode = node.parentId?.let { pId -> allNodes.firstOrNull { it.id == pId } }
             Card(
                 colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
@@ -263,20 +281,6 @@ fun InspectorPanel(
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Quick Keyframe All Button
-            Button(
-                onClick = onKeyframeAll,
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
-                shape = RoundedCornerShape(8.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Icon(Icons.Default.Key, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("Keyframe Transform", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-            }
-
             Spacer(modifier = Modifier.height(14.dp))
 
             // Transform Section
@@ -297,10 +301,10 @@ fun InspectorPanel(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.Lock, contentDescription = null, tint = Color(0xFF94A3B8), modifier = Modifier.size(14.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Anchored to Skeleton Joint", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF94A3B8))
+                        Text("Anchored to Joint Hinge", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF94A3B8))
                     }
                     Spacer(modifier = Modifier.height(2.dp))
-                    Text("Limb is anchored to socket. Move character root to reposition in scene.", fontSize = 10.sp, color = Color(0xFF64748B))
+                    Text("Limb joint is anchored. Move character root to reposition.", fontSize = 10.sp, color = Color(0xFF64748B))
                     if (node.parentId != null) {
                         Spacer(modifier = Modifier.height(6.dp))
                         Button(
@@ -309,7 +313,7 @@ fun InspectorPanel(
                             shape = RoundedCornerShape(4.dp),
                             modifier = Modifier.height(26.dp)
                         ) {
-                            Text("Select Character Root", fontSize = 10.sp, color = Color(0xFF38BDF8))
+                            Text("Select Parent Hinge", fontSize = 10.sp, color = Color(0xFF38BDF8))
                         }
                     }
                 }
@@ -319,7 +323,7 @@ fun InspectorPanel(
                     values = listOf(t.position.x, t.position.y, t.position.z),
                     labels = listOf("X", "Y", "Z"),
                     colors = listOf(Color(0xFFEF4444), Color(0xFF22C55E), Color(0xFF3B82F6)),
-                    step = 0.5f,
+                    sensitivity = 0.05f,
                     onValueChange = { idx, newVal ->
                         val newPos = when (idx) {
                             0 -> t.position.copy(x = newVal)
@@ -327,19 +331,6 @@ fun InspectorPanel(
                             else -> t.position.copy(z = newVal)
                         }
                         onUpdateTransform(t.copy(position = newPos))
-                    },
-                    onKeyframe = { idx ->
-                        val path = when (idx) {
-                            0 -> "transform.position.x"
-                            1 -> "transform.position.y"
-                            else -> "transform.position.z"
-                        }
-                        val v = when (idx) {
-                            0 -> t.position.x
-                            1 -> t.position.y
-                            else -> t.position.z
-                        }
-                        onAddKeyframe(path, v)
                     }
                 )
             }
@@ -348,11 +339,11 @@ fun InspectorPanel(
 
             // Rotation
             TransformChannelGroup(
-                title = if (node.type == SceneNodeType.CHARACTER_PART) "Rotation (Skeletal Limits)" else "Rotation",
+                title = if (node.type == SceneNodeType.CHARACTER_PART) "Rotation (Skeletal Joint Limits)" else "Rotation",
                 values = listOf(t.rotation.x, t.rotation.y, t.rotation.z),
                 labels = listOf("X", "Y", "Z"),
                 colors = listOf(Color(0xFFEF4444), Color(0xFF22C55E), Color(0xFF3B82F6)),
-                step = 15f,
+                sensitivity = 1.0f,
                 onValueChange = { idx, newVal ->
                     val clampedVal = if (node.type == SceneNodeType.CHARACTER_PART) {
                         clampRotationForPart(node.characterPartType, idx, newVal)
@@ -365,19 +356,6 @@ fun InspectorPanel(
                         else -> t.rotation.copy(z = clampedVal)
                     }
                     onUpdateTransform(t.copy(rotation = newRot))
-                },
-                onKeyframe = { idx ->
-                    val path = when (idx) {
-                        0 -> "transform.rotation.x"
-                        1 -> "transform.rotation.y"
-                        else -> "transform.rotation.z"
-                    }
-                    val v = when (idx) {
-                        0 -> t.rotation.x
-                        1 -> t.rotation.y
-                        else -> t.rotation.z
-                    }
-                    onAddKeyframe(path, v)
                 }
             )
 
@@ -397,19 +375,6 @@ fun InspectorPanel(
                         Spacer(modifier = Modifier.width(6.dp))
                         Text("Scale Entire Body Only", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF94A3B8))
                     }
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text("Individual limb scaling is locked. Scale the character root to resize the entire body.", fontSize = 10.sp, color = Color(0xFF64748B))
-                    if (node.parentId != null) {
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Button(
-                            onClick = { onSelectNode(node.parentId!!) },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF334155)),
-                            shape = RoundedCornerShape(4.dp),
-                            modifier = Modifier.height(26.dp)
-                        ) {
-                            Text("Select Character to Scale", fontSize = 10.sp, color = Color(0xFF38BDF8))
-                        }
-                    }
                 }
             } else {
                 TransformChannelGroup(
@@ -417,7 +382,7 @@ fun InspectorPanel(
                     values = listOf(t.scale.x, t.scale.y, t.scale.z),
                     labels = listOf("X", "Y", "Z"),
                     colors = listOf(Color(0xFFEF4444), Color(0xFF22C55E), Color(0xFF3B82F6)),
-                    step = 0.2f,
+                    sensitivity = 0.02f,
                     onValueChange = { idx, newVal ->
                         val coerced = newVal.coerceAtLeast(0.05f)
                         val newScale = if (node.type == SceneNodeType.CHARACTER_ROOT) {
@@ -430,24 +395,117 @@ fun InspectorPanel(
                             }
                         }
                         onUpdateTransform(t.copy(scale = newScale))
-                    },
-                    onKeyframe = { idx ->
-                        val path = when (idx) {
-                            0 -> "transform.scale.x"
-                            1 -> "transform.scale.y"
-                            else -> "transform.scale.z"
-                        }
-                        val v = when (idx) {
-                            0 -> t.scale.x
-                            1 -> t.scale.y
-                            else -> t.scale.z
-                        }
-                        onAddKeyframe(path, v)
                     }
                 )
             }
 
             Spacer(modifier = Modifier.height(14.dp))
+
+            // Light Properties Section
+            if (node.type == SceneNodeType.LIGHT) {
+                Text("Light Properties", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = Color(0xFF94A3B8))
+                Spacer(modifier = Modifier.height(6.dp))
+
+                val light = node.lightData ?: LightData()
+
+                // Light Type Selection Chips
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    LightType.values().forEach { lt ->
+                        val isSel = light.lightType == lt
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(if (isSel) Color(0xFF2563EB) else Color(0xFF334155))
+                                .clickable {
+                                    onUpdateLightData?.invoke(light.copy(lightType = lt))
+                                }
+                                .padding(vertical = 5.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                lt.name,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isSel) Color.White else Color(0xFFCBD5E1)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Light Color Presets
+                Text("Light Color", fontSize = 11.sp, color = Color(0xFF94A3B8))
+                Spacer(modifier = Modifier.height(4.dp))
+                val lightColors = listOf(
+                    0xFFFFF2D4.toInt(), // Sun Gold
+                    0xFFFFFFFF.toInt(), // Pure White
+                    0xFF38BDF8.toInt(), // Cool Cyan
+                    0xFFF59E0B.toInt(), // Warm Amber
+                    0xFFEF4444.toInt(), // Crimson Red
+                    0xFF22C55E.toInt()  // Emerald Green
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    lightColors.forEach { c ->
+                        val isSelected = light.color == c
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(Color(c))
+                                .border(
+                                    width = if (isSelected) 2.dp else 1.dp,
+                                    color = if (isSelected) Color.White else Color(0xFF475569),
+                                    shape = RoundedCornerShape(4.dp)
+                                )
+                                .clickable {
+                                    onUpdateLightData?.invoke(light.copy(color = c))
+                                }
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Intensity
+                Text("Intensity: ${String.format("%.1f", light.intensity)}x", fontSize = 11.sp, color = Color(0xFF94A3B8))
+                Slider(
+                    value = light.intensity,
+                    onValueChange = { onUpdateLightData?.invoke(light.copy(intensity = it)) },
+                    valueRange = 0.0f..5.0f,
+                    colors = SliderDefaults.colors(thumbColor = Color(0xFFF59E0B), activeTrackColor = Color(0xFFF59E0B))
+                )
+
+                if (light.lightType != LightType.SUN) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text("Range Distance: ${String.format("%.1f", light.range)}m", fontSize = 11.sp, color = Color(0xFF94A3B8))
+                    Slider(
+                        value = light.range,
+                        onValueChange = { onUpdateLightData?.invoke(light.copy(range = it)) },
+                        valueRange = 1.0f..50.0f,
+                        colors = SliderDefaults.colors(thumbColor = Color(0xFF38BDF8), activeTrackColor = Color(0xFF38BDF8))
+                    )
+                }
+
+                if (light.lightType == LightType.SPOT) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text("Spot Cone Angle: ${light.coneAngle.toInt()}°", fontSize = 11.sp, color = Color(0xFF94A3B8))
+                    Slider(
+                        value = light.coneAngle,
+                        onValueChange = { onUpdateLightData?.invoke(light.copy(coneAngle = it)) },
+                        valueRange = 10.0f..120.0f,
+                        colors = SliderDefaults.colors(thumbColor = Color(0xFFA855F7), activeTrackColor = Color(0xFFA855F7))
+                    )
+                }
+                Spacer(modifier = Modifier.height(14.dp))
+            }
 
             // Presets (for Character)
             if (node.type == SceneNodeType.CHARACTER_ROOT || node.type == SceneNodeType.CHARACTER_PART) {
@@ -479,9 +537,9 @@ fun InspectorPanel(
                 Spacer(modifier = Modifier.height(14.dp))
             }
 
-            // Material / Block Texture
-            if (node.type == SceneNodeType.BLOCK || node.type == SceneNodeType.GROUND) {
-                Text("Block Texture", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = Color(0xFF94A3B8))
+            // Material / Block / Plane Texture
+            if (node.type == SceneNodeType.BLOCK || node.type == SceneNodeType.GROUND || node.type == SceneNodeType.PLANE) {
+                Text("Texture Asset", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = Color(0xFF94A3B8))
                 Spacer(modifier = Modifier.height(6.dp))
 
                 FlowRow(
@@ -507,19 +565,19 @@ fun InspectorPanel(
                 }
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // Opacity
+                // Opacity: Allow min value 0.0f
                 Text("Opacity: ${(node.material.opacity * 100).toInt()}%", fontSize = 11.sp, color = Color(0xFF94A3B8))
                 Slider(
                     value = node.material.opacity,
-                    onValueChange = { onUpdateMaterial(node.material.textureAssetId, it) },
-                    valueRange = 0.1f..1.0f,
+                    onValueChange = { onUpdateMaterial(node.material.textureAssetId, it.coerceIn(0.0f, 1.0f)) },
+                    valueRange = 0.0f..1.0f,
                     colors = SliderDefaults.colors(thumbColor = Color(0xFF3B82F6), activeTrackColor = Color(0xFF3B82F6))
                 )
             }
         }
     }
 
-    // 1. Rename Node Dialog ("add 'name' property (input dialog)")
+    // Rename Node Dialog
     if (showRenameDialog && node != null) {
         var newNameText by remember { mutableStateOf(node.name) }
         AlertDialog(
@@ -556,7 +614,7 @@ fun InspectorPanel(
         )
     }
 
-    // 2. Parent Selection Dialog ("add 'parent' property (select from list, scrollable tree)")
+    // Parent Selection Dialog
     if (showParentDialog && node != null) {
         Dialog(onDismissRequest = { showParentDialog = false }) {
             Surface(
@@ -590,7 +648,6 @@ fun InspectorPanel(
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    // Option: No parent (Root)
                     Card(
                         colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
                         shape = RoundedCornerShape(8.dp),
@@ -618,7 +675,6 @@ fun InspectorPanel(
                     Text("Or select another object:", fontSize = 11.sp, color = Color(0xFF94A3B8))
                     Spacer(modifier = Modifier.height(6.dp))
 
-                    // Scrollable List / Tree of all eligible nodes
                     val eligibleNodes = remember(allNodes, node) {
                         allNodes.filter { it.id != node.id && !node.children.contains(it.id) }
                     }
@@ -687,10 +743,11 @@ fun TransformChannelGroup(
     values: List<Float>,
     labels: List<String>,
     colors: List<Color>,
-    step: Float,
-    onValueChange: (Int, Float) -> Unit,
-    onKeyframe: (Int) -> Unit
+    sensitivity: Float,
+    onValueChange: (Int, Float) -> Unit
 ) {
+    var activeFieldIndex by remember { mutableStateOf<Int?>(null) }
+
     Column {
         Text(title, fontSize = 11.sp, color = Color(0xFF64748B), fontWeight = FontWeight.Medium)
         Spacer(modifier = Modifier.height(4.dp))
@@ -700,40 +757,156 @@ fun TransformChannelGroup(
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             values.forEachIndexed { idx, v ->
-                Row(
+                Box(
                     modifier = Modifier
                         .weight(1f)
                         .clip(RoundedCornerShape(6.dp))
                         .background(Color(0xFF0F172A))
-                        .padding(horizontal = 4.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .border(1.dp, Color(0xFF334155), RoundedCornerShape(6.dp))
+                        .pointerInput(idx) {
+                            detectHorizontalDragGestures { change, dragAmount ->
+                                change.consume()
+                                val delta = dragAmount * sensitivity
+                                onValueChange(idx, v + delta)
+                            }
+                        }
+                        .clickable { activeFieldIndex = idx }
+                        .padding(horizontal = 6.dp, vertical = 6.dp),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            labels[idx],
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = colors[idx]
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            String.format("%.1f", v),
+                            fontSize = 11.sp,
+                            fontFamily = FontFamily.Monospace,
+                            color = Color(0xFFE2E8F0)
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    // Compact Numeric Keypad Dialog on click
+    if (activeFieldIndex != null) {
+        val targetIdx = activeFieldIndex!!
+        val initialVal = values[targetIdx]
+        NumericKeypadDialog(
+            title = "${title} ${labels[targetIdx]}",
+            initialValue = initialVal,
+            onDismiss = { activeFieldIndex = null },
+            onConfirm = { newVal ->
+                onValueChange(targetIdx, newVal)
+                activeFieldIndex = null
+            }
+        )
+    }
+}
+
+@Composable
+fun NumericKeypadDialog(
+    title: String,
+    initialValue: Float,
+    onDismiss: () -> Unit,
+    onConfirm: (Float) -> Unit
+) {
+    var textState by remember { mutableStateOf(String.format("%.1f", initialValue)) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(14.dp),
+            color = Color(0xFF1E293B),
+            tonalElevation = 8.dp,
+            modifier = Modifier
+                .width(240.dp)
+                .padding(4.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(title, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFF38BDF8))
+                Spacer(modifier = Modifier.height(6.dp))
+
+                // Display Box
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color(0xFF0F172A))
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    contentAlignment = Alignment.CenterEnd
                 ) {
                     Text(
-                        labels[idx],
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = colors[idx]
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        String.format("%.1f", v),
-                        fontSize = 11.sp,
+                        textState.ifEmpty { "0" },
+                        fontSize = 16.sp,
                         fontFamily = FontFamily.Monospace,
-                        color = Color(0xFFE2E8F0),
-                        modifier = Modifier.weight(1f)
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
                     )
+                }
 
-                    // Keyframe icon button
-                    IconButton(
-                        onClick = { onKeyframe(idx) },
-                        modifier = Modifier.size(18.dp)
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Keypad grid
+                val keys = listOf(
+                    listOf("1", "2", "3", "BACK"),
+                    listOf("4", "5", "6", "CLEAR"),
+                    listOf("7", "8", "9", "-"),
+                    listOf(".", "0", "OK")
+                )
+
+                keys.forEach { row ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 2.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        Icon(
-                            Icons.Default.Key,
-                            contentDescription = "Keyframe",
-                            tint = Color(0xFF38BDF8),
-                            modifier = Modifier.size(12.dp)
-                        )
+                        row.forEach { key ->
+                            Surface(
+                                onClick = {
+                                    when (key) {
+                                        "BACK" -> if (textState.isNotEmpty()) textState = textState.dropLast(1)
+                                        "CLEAR" -> textState = ""
+                                        "OK" -> {
+                                            val parsed = textState.toFloatOrNull() ?: initialValue
+                                            onConfirm(parsed)
+                                        }
+                                        "-" -> {
+                                            textState = if (textState.startsWith("-")) textState.drop(1) else "-$textState"
+                                        }
+                                        else -> textState += key
+                                    }
+                                },
+                                shape = RoundedCornerShape(6.dp),
+                                color = when (key) {
+                                    "OK" -> Color(0xFF22C55E)
+                                    "BACK", "CLEAR" -> Color(0xFFEF4444)
+                                    else -> Color(0xFF334155)
+                                },
+                                modifier = Modifier
+                                    .weight(if (key == "OK") 2f else 1f)
+                                    .height(34.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    when (key) {
+                                        "BACK" -> Icon(Icons.Default.Backspace, contentDescription = "Delete", tint = Color.White, modifier = Modifier.size(14.dp))
+                                        "CLEAR" -> Icon(Icons.Default.Clear, contentDescription = "Erase", tint = Color.White, modifier = Modifier.size(14.dp))
+                                        "OK" -> Icon(Icons.Default.Check, contentDescription = "Confirm", tint = Color.White, modifier = Modifier.size(16.dp))
+                                        else -> Text(key, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }

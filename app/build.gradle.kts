@@ -11,12 +11,13 @@ plugins {
 
 android {
   namespace = "com.example"
-  compileSdk { version = release(36) { minorApiLevel = 1 } }
+  compileSdk = 34
+  buildToolsVersion = "34.0.0"
 
   defaultConfig {
     applicationId = "com.star4droid.mc.animation"
     minSdk = 24
-    targetSdk = 36
+    targetSdk = 34
     versionCode = 1
     versionName = "1.0"
 

@@ -16,21 +16,30 @@ import com.star4droid.mc.animation.ui.MinecraftAnimationApp
 
 class MainActivity : ComponentActivity() {
 
-  fun hideStatusBarPermanently() {
+  fun updateStatusBarVisibility() {
     WindowCompat.setDecorFitsSystemWindows(window, false)
     val controller = WindowCompat.getInsetsController(window, window.decorView)
     controller.systemBarsBehavior =
       WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-    controller.hide(WindowInsetsCompat.Type.statusBars())
 
-    // Also enforce via WindowManager flags for legacy and landscape robustness
-    @Suppress("DEPRECATION")
-    window.decorView.systemUiVisibility = (
-      View.SYSTEM_UI_FLAG_FULLSCREEN
-        or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-        or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-        or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-    )
+    val isLandscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+    if (isLandscape) {
+      controller.hide(WindowInsetsCompat.Type.statusBars())
+      @Suppress("DEPRECATION")
+      window.decorView.systemUiVisibility = (
+        View.SYSTEM_UI_FLAG_FULLSCREEN
+          or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+          or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+          or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+      )
+    } else {
+      controller.show(WindowInsetsCompat.Type.statusBars())
+      @Suppress("DEPRECATION")
+      window.decorView.systemUiVisibility = (
+        View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+          or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+      )
+    }
 
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
       window.attributes.layoutInDisplayCutoutMode =
@@ -45,24 +54,22 @@ class MainActivity : ComponentActivity() {
     } else {
       ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
     }
-    window.decorView.postDelayed({ hideStatusBarPermanently() }, 100)
+    window.decorView.postDelayed({ updateStatusBarVisibility() }, 100)
   }
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     enableEdgeToEdge()
-    hideStatusBarPermanently()
+    updateStatusBarVisibility()
 
     window.decorView.setOnApplyWindowInsetsListener { view, insets ->
-      hideStatusBarPermanently()
+      updateStatusBarVisibility()
       view.onApplyWindowInsets(insets)
     }
 
     @Suppress("DEPRECATION")
-    window.decorView.setOnSystemUiVisibilityChangeListener { visibility ->
-      if ((visibility and View.SYSTEM_UI_FLAG_FULLSCREEN) == 0) {
-        hideStatusBarPermanently()
-      }
+    window.decorView.setOnSystemUiVisibilityChangeListener {
+      updateStatusBarVisibility()
     }
 
     setContent {
@@ -73,12 +80,17 @@ class MainActivity : ComponentActivity() {
   override fun onWindowFocusChanged(hasFocus: Boolean) {
     super.onWindowFocusChanged(hasFocus)
     if (hasFocus) {
-      hideStatusBarPermanently()
+      updateStatusBarVisibility()
     }
   }
 
   override fun onResume() {
     super.onResume()
-    hideStatusBarPermanently()
+    updateStatusBarVisibility()
+  }
+
+  override fun onConfigurationChanged(newConfig: Configuration) {
+    super.onConfigurationChanged(newConfig)
+    updateStatusBarVisibility()
   }
 }

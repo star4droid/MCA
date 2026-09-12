@@ -7,7 +7,8 @@ enum class SceneNodeType {
     CHARACTER_PART,
     CAMERA,
     LIGHT,
-    GROUND
+    GROUND,
+    PLANE
 }
 
 enum class CharacterPartType {
@@ -16,8 +17,12 @@ enum class CharacterPartType {
     BODY,
     LEFT_ARM,
     RIGHT_ARM,
+    LEFT_FOREARM,
+    RIGHT_FOREARM,
     LEFT_LEG,
-    RIGHT_LEG
+    RIGHT_LEG,
+    LEFT_LOWER_LEG,
+    RIGHT_LOWER_LEG
 }
 
 enum class TimeOfDay {
@@ -25,6 +30,12 @@ enum class TimeOfDay {
     NOON,
     EVENING,
     NIGHT
+}
+
+enum class LightType {
+    SUN,
+    POINT,
+    SPOT
 }
 
 data class Material(
@@ -41,8 +52,12 @@ data class CameraData(
 )
 
 data class LightData(
+    val lightType: LightType = LightType.POINT,
     val color: Int = 0xFFFFF2D4.toInt(),
     val intensity: Float = 1.2f,
+    val range: Float = 15.0f,
+    val coneAngle: Float = 45.0f,
     val timeOfDay: TimeOfDay = TimeOfDay.NOON,
     val shadows: Boolean = true
 )
+

@@ -49,6 +49,8 @@ class SceneRenderer(
     private val viewProjMatrix = FloatArray(16)
     val invViewProjMatrix = Mat4()
 
+    private var planeMesh: Mesh? = null
+
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
         GLES20.glEnable(GLES20.GL_DEPTH_TEST)
         GLES20.glDepthFunc(GLES20.GL_LEQUAL)
@@ -58,6 +60,7 @@ class SceneRenderer(
         shader = Shader(Shader.VERTEX_SHADER_SRC, Shader.FRAGMENT_SHADER_SRC)
         cubeMesh = Geometry.createCubeMesh(1f, 1f, 1f)
         headMesh = Geometry.createHeadMesh(1f, 1f, 1f)
+        planeMesh = Geometry.createPlaneMesh(1f, 1f)
         gridMesh = Geometry.createGridMesh(30, 1.0f)
         wireframeMesh = Geometry.createBoundingWireframeMesh(1f, 1f, 1f)
         cameraFrustumMesh = Geometry.createCameraFrustumMesh(60f, 16f / 9f, 2.2f)
@@ -177,7 +180,7 @@ class SceneRenderer(
         isSelected: Boolean
     ) {
         when (node.type) {
-            SceneNodeType.BLOCK, SceneNodeType.CHARACTER_PART, SceneNodeType.GROUND -> {
+            SceneNodeType.BLOCK, SceneNodeType.CHARACTER_PART, SceneNodeType.GROUND, SceneNodeType.PLANE -> {
                 // Combine node world matrix with local box dimension scaling
                 val nodeMat = node.worldMatrix.values
                 val dimScale = Mat4.scaling(node.boxDimensions)
@@ -217,10 +220,10 @@ class SceneRenderer(
                     GLES20.glDisable(GLES20.GL_BLEND)
                 }
 
-                val meshToDraw = if (node.characterPartType == CharacterPartType.HEAD && headMesh != null) {
-                    headMesh!!
-                } else {
-                    cube
+                val meshToDraw = when {
+                    node.type == SceneNodeType.PLANE && planeMesh != null -> planeMesh!!
+                    node.characterPartType == CharacterPartType.HEAD && headMesh != null -> headMesh!!
+                    else -> cube
                 }
 
                 bindMesh(s, meshToDraw)
@@ -242,8 +245,7 @@ class SceneRenderer(
                 }
             }
             SceneNodeType.LIGHT -> {
-                // Draw Sun indicator box
-                renderMarker(s, cube, node.getWorldPosition(), viewProj, isSelected, 1.0f, 0.85f, 0.2f)
+                renderLightIcon(s, cube, node, viewProj, isSelected)
             }
             else -> {}
         }
@@ -318,6 +320,53 @@ class SceneRenderer(
 
         bindMesh(s, mesh)
         GLES20.glDrawElements(GLES20.GL_TRIANGLES, mesh.indexCount, GLES20.GL_UNSIGNED_SHORT, mesh.indexBuffer)
+    }
+
+    private fun renderLightIcon(
+        s: Shader,
+        cube: Mesh,
+        node: SceneNode,
+        viewProj: FloatArray,
+        isSelected: Boolean
+    ) {
+        val lightData = node.lightData ?: com.star4droid.mc.animation.engine.scene.LightData()
+        val pos = node.getWorldPosition()
+        val cInt = lightData.color
+        val r = ((cInt shr 16) and 0xFF) / 255f
+        val g = ((cInt shr 8) and 0xFF) / 255f
+        val b = (cInt and 0xFF) / 255f
+
+        val nodeWorld = node.worldMatrix
+
+        when (lightData.lightType) {
+            com.star4droid.mc.animation.engine.scene.LightType.SUN -> {
+                // Sun Light Icon: Glowing central core + 4 diagonal rays
+                val coreMat = nodeWorld * Mat4.scaling(0.32f, 0.32f, 0.32f)
+                drawMeshWithMatrix(s, cube, coreMat, viewProj, isSelected, 1.0f, 0.9f, 0.2f)
+
+                // Cross Rays
+                val ray1Mat = nodeWorld * Mat4.scaling(0.55f, 0.08f, 0.08f)
+                drawMeshWithMatrix(s, cube, ray1Mat, viewProj, isSelected, 1.0f, 0.8f, 0.1f)
+                val ray2Mat = nodeWorld * Mat4.scaling(0.08f, 0.55f, 0.08f)
+                drawMeshWithMatrix(s, cube, ray2Mat, viewProj, isSelected, 1.0f, 0.8f, 0.1f)
+            }
+            com.star4droid.mc.animation.engine.scene.LightType.POINT -> {
+                // Point Light Icon: Glowing sphere bulb + base ring
+                val bulbMat = nodeWorld * Mat4.scaling(0.28f, 0.28f, 0.28f)
+                drawMeshWithMatrix(s, cube, bulbMat, viewProj, isSelected, r, g, b)
+
+                val baseMat = nodeWorld * Mat4.translation(Vec3(0f, -0.18f, 0f)) * Mat4.scaling(0.12f, 0.12f, 0.12f)
+                drawMeshWithMatrix(s, cube, baseMat, viewProj, isSelected, 0.3f, 0.3f, 0.35f)
+            }
+            com.star4droid.mc.animation.engine.scene.LightType.SPOT -> {
+                // Spot Light Icon: Spotlight housing + front lens glowing cone
+                val housingMat = nodeWorld * Mat4.scaling(0.26f, 0.26f, 0.35f)
+                drawMeshWithMatrix(s, cube, housingMat, viewProj, isSelected, 0.2f, 0.22f, 0.28f)
+
+                val lensMat = nodeWorld * Mat4.translation(Vec3(0f, 0f, -0.22f)) * Mat4.scaling(0.28f, 0.28f, 0.06f)
+                drawMeshWithMatrix(s, cube, lensMat, viewProj, isSelected, r, g, b)
+            }
+        }
     }
 
     private fun renderMarker(

@@ -285,4 +285,32 @@ object Geometry {
 
         return Mesh(vBuf, iBuf, indices.size)
     }
+
+    fun createPlaneMesh(dx: Float = 1.0f, dz: Float = 1.0f): Mesh {
+        val hx = dx * 0.5f
+        val hz = dz * 0.5f
+
+        val vertices = floatArrayOf(
+            -hx, 0f,  hz,   0f, 1f, 0f,   0f, 1f,
+             hx, 0f,  hz,   0f, 1f, 0f,   1f, 1f,
+             hx, 0f, -hz,   0f, 1f, 0f,   1f, 0f,
+            -hx, 0f, -hz,   0f, 1f, 0f,   0f, 0f
+        )
+
+        val indices = shortArrayOf(
+            0, 1, 2,  0, 2, 3
+        )
+
+        val vBuf = ByteBuffer.allocateDirect(vertices.size * 4).run {
+            order(ByteOrder.nativeOrder())
+            asFloatBuffer().apply { put(vertices); position(0) }
+        }
+
+        val iBuf = ByteBuffer.allocateDirect(indices.size * 2).run {
+            order(ByteOrder.nativeOrder())
+            asShortBuffer().apply { put(indices); position(0) }
+        }
+
+        return Mesh(vBuf, iBuf, indices.size)
+    }
 }
