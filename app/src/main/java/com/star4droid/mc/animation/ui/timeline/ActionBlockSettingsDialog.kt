@@ -263,6 +263,26 @@ fun ActionBlockSettingsDialog(
                             colors = SliderDefaults.colors(thumbColor = Color(0xFF38BDF8), activeTrackColor = Color(0xFF0284C7))
                         )
                     }
+
+                    else -> {
+                        Text("Action Motion Amplitude: ${String.format("%.2f", stepSize)}x", fontSize = 12.sp, color = Color(0xFFE2E8F0))
+                        Slider(
+                            value = stepSize,
+                            onValueChange = { stepSize = (Math.round(it * 100f) / 100f).coerceIn(0.1f, 3.0f) },
+                            valueRange = 0.1f..3.0f,
+                            colors = SliderDefaults.colors(thumbColor = Color(0xFF38BDF8), activeTrackColor = Color(0xFF0284C7))
+                        )
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        Text("Action Playback Speed: ${String.format("%.2f", speed)}x", fontSize = 12.sp, color = Color(0xFFE2E8F0))
+                        Slider(
+                            value = speed,
+                            onValueChange = { speed = (Math.round(it * 100f) / 100f).coerceIn(0.2f, 4.0f) },
+                            valueRange = 0.2f..4.0f,
+                            colors = SliderDefaults.colors(thumbColor = Color(0xFFA855F7), activeTrackColor = Color(0xFF7C3AED))
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))

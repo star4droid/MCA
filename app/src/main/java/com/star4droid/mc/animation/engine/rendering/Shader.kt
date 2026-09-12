@@ -22,6 +22,12 @@ class Shader(vertexSource: String, fragmentSource: String) {
     val uTexture: Int
     val uUseTexture: Int
 
+    val uNumPointLights: Int
+    val uPointLightPos: Int
+    val uPointLightColor: Int
+    val uPointLightIntensity: Int
+    val uPointLightRange: Int
+
     init {
         val vertexShader = compileShader(GLES20.GL_VERTEX_SHADER, vertexSource)
         val fragmentShader = compileShader(GLES20.GL_FRAGMENT_SHADER, fragmentSource)
@@ -54,6 +60,12 @@ class Shader(vertexSource: String, fragmentSource: String) {
         uIsSelected = GLES20.glGetUniformLocation(programId, "uIsSelected")
         uTexture = GLES20.glGetUniformLocation(programId, "uTexture")
         uUseTexture = GLES20.glGetUniformLocation(programId, "uUseTexture")
+
+        uNumPointLights = GLES20.glGetUniformLocation(programId, "uNumPointLights")
+        uPointLightPos = GLES20.glGetUniformLocation(programId, "uPointLightPos")
+        uPointLightColor = GLES20.glGetUniformLocation(programId, "uPointLightColor")
+        uPointLightIntensity = GLES20.glGetUniformLocation(programId, "uPointLightIntensity")
+        uPointLightRange = GLES20.glGetUniformLocation(programId, "uPointLightRange")
     }
 
     fun use() {
@@ -89,7 +101,6 @@ class Shader(vertexSource: String, fragmentSource: String) {
 
             void main() {
                 vPosition = vec3(uModelMatrix * aPosition);
-                // Simple normal transformation (assuming uniform scaling)
                 vNormal = normalize(vec3(uModelMatrix * vec4(aNormal, 0.0)));
                 vTexCoord = aTexCoord;
                 gl_Position = uMVPMatrix * aPosition;
@@ -108,6 +119,12 @@ class Shader(vertexSource: String, fragmentSource: String) {
             uniform sampler2D uTexture;
             uniform float uUseTexture;
 
+            uniform int uNumPointLights;
+            uniform vec3 uPointLightPos[4];
+            uniform vec3 uPointLightColor[4];
+            uniform float uPointLightIntensity[4];
+            uniform float uPointLightRange[4];
+
             varying vec3 vNormal;
             varying vec3 vPosition;
             varying vec2 vTexCoord;
@@ -119,19 +136,29 @@ class Shader(vertexSource: String, fragmentSource: String) {
                     baseColor = vec4(texColor.rgb * uObjectColor.rgb, texColor.a * uObjectColor.a);
                 }
 
-                // Discard fully transparent pixels (e.g. cutouts)
                 if (baseColor.a < 0.05) {
                     discard;
                 }
 
-                // Diffuse lighting with directional sun
                 vec3 norm = normalize(vNormal);
                 float diff = max(dot(norm, normalize(uLightDir)), 0.0);
                 vec3 lighting = uAmbientColor + uLightColor * diff;
 
+                for (int i = 0; i < 4; i++) {
+                    if (i >= uNumPointLights) break;
+                    vec3 lightVec = uPointLightPos[i] - vPosition;
+                    float dist = length(lightVec);
+                    if (dist < uPointLightRange[i]) {
+                        vec3 lDir = normalize(lightVec);
+                        float pDiff = max(dot(norm, lDir), 0.0);
+                        float atten = 1.0 - (dist / uPointLightRange[i]);
+                        atten = atten * atten;
+                        lighting += uPointLightColor[i] * pDiff * uPointLightIntensity[i] * atten;
+                    }
+                }
+
                 vec3 finalRgb = baseColor.rgb * lighting;
 
-                // Selection highlight tint
                 if (uIsSelected > 0.5) {
                     finalRgb = mix(finalRgb, uSelectionColor.rgb, 0.4);
                 }

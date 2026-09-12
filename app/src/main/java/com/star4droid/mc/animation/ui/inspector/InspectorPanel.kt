@@ -3,7 +3,9 @@ package com.star4droid.mc.animation.ui.inspector
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -507,36 +509,6 @@ fun InspectorPanel(
                 Spacer(modifier = Modifier.height(14.dp))
             }
 
-            // Presets (for Character)
-            if (node.type == SceneNodeType.CHARACTER_ROOT || node.type == SceneNodeType.CHARACTER_PART) {
-                Text("Animation Presets", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = Color(0xFF94A3B8))
-                Spacer(modifier = Modifier.height(6.dp))
-
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    PresetType.values().forEach { preset ->
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(Color(0xFF334155))
-                                .clickable { onApplyPreset(preset) }
-                                .padding(horizontal = 8.dp, vertical = 5.dp)
-                        ) {
-                            Text(
-                                preset.displayName,
-                                fontSize = 11.sp,
-                                color = Color(0xFFF1F5F9),
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-                    }
-                }
-                Spacer(modifier = Modifier.height(14.dp))
-            }
-
             // Material / Block / Plane Texture
             if (node.type == SceneNodeType.BLOCK || node.type == SceneNodeType.GROUND || node.type == SceneNodeType.PLANE) {
                 Text("Texture Asset", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = Color(0xFF94A3B8))
@@ -747,6 +719,8 @@ fun TransformChannelGroup(
     onValueChange: (Int, Float) -> Unit
 ) {
     var activeFieldIndex by remember { mutableStateOf<Int?>(null) }
+    val currentValues by rememberUpdatedState(values)
+    val currentOnValueChange by rememberUpdatedState(onValueChange)
 
     Column {
         Text(title, fontSize = 11.sp, color = Color(0xFF64748B), fontWeight = FontWeight.Medium)
@@ -757,6 +731,9 @@ fun TransformChannelGroup(
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             values.forEachIndexed { idx, v ->
+                var totalDrag by remember { mutableStateOf(0f) }
+                var isDragging by remember { mutableStateOf(false) }
+
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -764,13 +741,30 @@ fun TransformChannelGroup(
                         .background(Color(0xFF0F172A))
                         .border(1.dp, Color(0xFF334155), RoundedCornerShape(6.dp))
                         .pointerInput(idx) {
-                            detectHorizontalDragGestures { change, dragAmount ->
-                                change.consume()
-                                val delta = dragAmount * sensitivity
-                                onValueChange(idx, v + delta)
-                            }
+                            detectDragGestures(
+                                onDragStart = {
+                                    totalDrag = 0f
+                                    isDragging = false
+                                },
+                                onDragEnd = {
+                                    if (!isDragging) {
+                                        activeFieldIndex = idx
+                                    }
+                                },
+                                onDragCancel = {
+                                    isDragging = false
+                                },
+                                onDrag = { change, dragAmount ->
+                                    change.consume()
+                                    totalDrag += Math.abs(dragAmount.x) + Math.abs(dragAmount.y)
+                                    if (totalDrag > 5f) {
+                                        isDragging = true
+                                    }
+                                    val delta = dragAmount.x * sensitivity
+                                    currentOnValueChange(idx, currentValues[idx] + delta)
+                                }
+                            )
                         }
-                        .clickable { activeFieldIndex = idx }
                         .padding(horizontal = 6.dp, vertical = 6.dp),
                     contentAlignment = Alignment.CenterStart
                 ) {

@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -48,6 +49,26 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.TrendingFlat
+import androidx.compose.material.icons.filled.RotateRight
+import androidx.compose.material.icons.filled.RotateLeft
+import androidx.compose.material.icons.filled.Face
+import androidx.compose.material.icons.filled.SportsKabaddi
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.Autorenew
+import androidx.compose.material.icons.filled.EventSeat
+import androidx.compose.material.icons.filled.Accessibility
+import androidx.compose.material.icons.filled.ThumbUp
+import androidx.compose.material.icons.filled.ThumbDown
+import androidx.compose.material.icons.filled.Celebration
+import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.HelpOutline
+import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.PersonOutline
+import androidx.compose.material.icons.filled.VerticalAlignBottom
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.EmojiEmotions
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
@@ -86,6 +107,28 @@ fun getActionBlockColor(type: ActionBlockType): Color = when (type) {
     ActionBlockType.MOVE_TO_POS -> Color(0xFF14B8A6)
     ActionBlockType.SCALE -> Color(0xFFEC4899)
     ActionBlockType.ANIMATION_CLIP -> Color(0xFFA855F7)
+    ActionBlockType.ROTATE -> Color(0xFFE879F9)
+    ActionBlockType.TILT_HEAD -> Color(0xFF67E8F9)
+    ActionBlockType.PUNCH -> Color(0xFFEF4444)
+    ActionBlockType.LOOK_LEFT -> Color(0xFF38BDF8)
+    ActionBlockType.LOOK_RIGHT -> Color(0xFF38BDF8)
+    ActionBlockType.BACKFLIP -> Color(0xFFFBBF24)
+    ActionBlockType.JUMP_FRONT -> Color(0xFF34D399)
+    ActionBlockType.SIT_DOWN -> Color(0xFFFB923C)
+    ActionBlockType.STAND_UP -> Color(0xFF4ADE80)
+    ActionBlockType.KICK -> Color(0xFFF87171)
+    ActionBlockType.NOD_HEAD -> Color(0xFF93C5FD)
+    ActionBlockType.SHAKE_HEAD -> Color(0xFFFCA5A5)
+    ActionBlockType.CLAP -> Color(0xFFFDE047)
+    ActionBlockType.CHEER -> Color(0xFF86EFAC)
+    ActionBlockType.SHRUG -> Color(0xFFD8B4FE)
+    ActionBlockType.CROSS_ARMS -> Color(0xFF94A3B8)
+    ActionBlockType.BOW -> Color(0xFFFDA4AF)
+    ActionBlockType.DEATH_FALL -> Color(0xFF64748B)
+    ActionBlockType.SNEAK_WALK -> Color(0xFF6EE7B7)
+    ActionBlockType.SPIN_ATTACK -> Color(0xFFF472B6)
+    ActionBlockType.BLOCK_SHIELD -> Color(0xFF60A5FA)
+    ActionBlockType.TAUNT -> Color(0xFFFBCFE8)
 }
 
 fun getActionBlockIcon(type: ActionBlockType): ImageVector = when (type) {
@@ -97,6 +140,28 @@ fun getActionBlockIcon(type: ActionBlockType): ImageVector = when (type) {
     ActionBlockType.MOVE_TO_POS -> Icons.Default.NearMe
     ActionBlockType.SCALE -> Icons.Default.AspectRatio
     ActionBlockType.ANIMATION_CLIP -> Icons.Default.Movie
+    ActionBlockType.ROTATE -> Icons.Default.RotateRight
+    ActionBlockType.TILT_HEAD -> Icons.Default.Face
+    ActionBlockType.PUNCH -> Icons.Default.SportsKabaddi
+    ActionBlockType.LOOK_LEFT -> Icons.Default.ArrowBack
+    ActionBlockType.LOOK_RIGHT -> Icons.Default.ArrowForward
+    ActionBlockType.BACKFLIP -> Icons.Default.Autorenew
+    ActionBlockType.JUMP_FRONT -> Icons.Default.FlightTakeoff
+    ActionBlockType.SIT_DOWN -> Icons.Default.EventSeat
+    ActionBlockType.STAND_UP -> Icons.Default.Accessibility
+    ActionBlockType.KICK -> Icons.Default.SportsKabaddi
+    ActionBlockType.NOD_HEAD -> Icons.Default.ThumbUp
+    ActionBlockType.SHAKE_HEAD -> Icons.Default.ThumbDown
+    ActionBlockType.CLAP -> Icons.Default.Celebration
+    ActionBlockType.CHEER -> Icons.Default.EmojiEvents
+    ActionBlockType.SHRUG -> Icons.Default.HelpOutline
+    ActionBlockType.CROSS_ARMS -> Icons.Default.Block
+    ActionBlockType.BOW -> Icons.Default.PersonOutline
+    ActionBlockType.DEATH_FALL -> Icons.Default.VerticalAlignBottom
+    ActionBlockType.SNEAK_WALK -> Icons.Default.Visibility
+    ActionBlockType.SPIN_ATTACK -> Icons.Default.RotateLeft
+    ActionBlockType.BLOCK_SHIELD -> Icons.Default.Shield
+    ActionBlockType.TAUNT -> Icons.Default.EmojiEmotions
 }
 
 @Composable
@@ -139,14 +204,13 @@ fun TimelinePanel(
     val totalTimelineWidth = dpPerSecond * duration
 
     // REQUIREMENT 4: Filter action blocks by selected item so each object has separate blocks!
-    val allBlocks = timeline?.actionBlocks ?: emptyList()
-    val blocks = remember(allBlocks, selectedNodeId) {
-        if (selectedNodeId == null) {
-            allBlocks
-        } else {
-            val filtered = allBlocks.filter { it.targetNodeId == selectedNodeId }
-            if (filtered.isNotEmpty()) filtered else allBlocks.filter { it.targetNodeId.isEmpty() }
-        }
+    // NOTE: Do NOT use remember() here - we need live snapshot for instant rendering of new blocks
+    val allBlocks = timeline?.actionBlocks?.toList() ?: emptyList()
+    val blocks = if (selectedNodeId == null) {
+        allBlocks
+    } else {
+        val filtered = allBlocks.filter { it.targetNodeId == selectedNodeId }
+        if (filtered.isNotEmpty()) filtered else allBlocks.filter { it.targetNodeId.isEmpty() }
     }
     val maxRow = (blocks.maxOfOrNull { it.trackRow } ?: 2).coerceAtLeast(3)
     val density = LocalDensity.current
@@ -241,9 +305,11 @@ fun TimelinePanel(
                 DropdownMenu(
                     expanded = addBlockMenuOpen,
                     onDismissRequest = { addBlockMenuOpen = false },
-                    modifier = Modifier.background(Color(0xFF1E293B))
+                    modifier = Modifier
+                        .background(Color(0xFF1E293B))
+                        .heightIn(max = 320.dp)
                 ) {
-                    ActionBlockType.values().forEach { blockType ->
+                    ActionBlockType.entries.forEach { blockType ->
                         DropdownMenuItem(
                             leadingIcon = {
                                 Icon(

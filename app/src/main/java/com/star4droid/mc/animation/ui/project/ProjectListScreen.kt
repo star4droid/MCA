@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
@@ -88,6 +89,17 @@ fun ProjectListScreen(
     var projectToRename by remember { mutableStateOf<ProjectMetadata?>(null) }
     var projectToDelete by remember { mutableStateOf<ProjectMetadata?>(null) }
 
+    var showSteveExportConfirmDialog by remember { mutableStateOf(false) }
+
+    val createSteveObjLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.CreateDocument("text/plain")
+    ) { uri ->
+        if (uri != null) {
+            val (objStr, _) = com.star4droid.mc.animation.utils.ObjExporter.generateSteveObjAndMtl()
+            com.star4droid.mc.animation.utils.ObjExporter.exportToUri(context, uri, objStr)
+        }
+    }
+
     fun refreshProjects(initial: Boolean = false) {
         var list = repository.listProjects()
         val isFirst = prefs.getBoolean("is_first_launch", true)
@@ -138,6 +150,11 @@ fun ProjectListScreen(
                     }
                 },
                 actions = {
+                    // Export Steve OBJ Button (SAF)
+                    IconButton(onClick = { showSteveExportConfirmDialog = true }) {
+                        Icon(Icons.Default.FileDownload, contentDescription = "Export Steve OBJ", tint = Color(0xFF10B981))
+                    }
+
                     // Import / File Browser button
                     IconButton(onClick = { showFileBrowser = true }) {
                         Icon(Icons.Default.FolderOpen, contentDescription = "Import Files", tint = Color(0xFF38BDF8))
@@ -305,6 +322,38 @@ fun ProjectListScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showCreateDialog = false }) {
+                    Text("Cancel", color = Color(0xFF94A3B8))
+                }
+            },
+            containerColor = Color(0xFF1E293B)
+        )
+    }
+
+    // Export Steve Model Confirmation Dialog
+    if (showSteveExportConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showSteveExportConfirmDialog = false },
+            title = { Text("Export Steve Model (OBJ/MTL)", color = Color(0xFFE2E8F0)) },
+            text = {
+                Text(
+                    "Export the 3D Steve character model as .obj and .mtl format using Storage Access Framework (SAF) so it can be edited in external 3D software?",
+                    color = Color(0xFFCBD5E1),
+                    fontSize = 13.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showSteveExportConfirmDialog = false
+                        createSteveObjLauncher.launch("steve_model.obj")
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))
+                ) {
+                    Text("Export via SAF", color = Color.White)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSteveExportConfirmDialog = false }) {
                     Text("Cancel", color = Color(0xFF94A3B8))
                 }
             },

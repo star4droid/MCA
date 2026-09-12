@@ -284,22 +284,35 @@ class EditorGLSurfaceView(
                             }
                             WorldBuildingTool.ADD -> {
                                 if (closestNode != null) {
-                                    // Place adjacent to clicked face
+                                    // Place adjacent to clicked face (accounting for block scale & dimensions)
                                     val hitPoint = ray.origin + ray.direction * closestDist
                                     val center = closestNode.getWorldPosition()
                                     val rel = hitPoint - center
+                                    val extentX = closestNode.boxDimensions.x * closestNode.animatedTransform.scale.x
+                                    val extentY = closestNode.boxDimensions.y * closestNode.animatedTransform.scale.y
+                                    val extentZ = closestNode.boxDimensions.z * closestNode.animatedTransform.scale.z
+
+                                    val normRelX = if (extentX > 0f) rel.x / (extentX * 0.5f) else rel.x
+                                    val normRelY = if (extentY > 0f) rel.y / (extentY * 0.5f) else rel.y
+                                    val normRelZ = if (extentZ > 0f) rel.z / (extentZ * 0.5f) else rel.z
+
                                     val normal = when {
-                                        abs(rel.y) >= abs(rel.x) && abs(rel.y) >= abs(rel.z) ->
-                                            Vec3(0f, if (rel.y > 0) 1f else -1f, 0f)
-                                        abs(rel.x) >= abs(rel.z) ->
-                                            Vec3(if (rel.x > 0) 1f else -1f, 0f, 0f)
+                                        abs(normRelY) >= abs(normRelX) && abs(normRelY) >= abs(normRelZ) ->
+                                            Vec3(0f, if (normRelY > 0) 1f else -1f, 0f)
+                                        abs(normRelX) >= abs(normRelZ) ->
+                                            Vec3(if (normRelX > 0) 1f else -1f, 0f, 0f)
                                         else ->
-                                            Vec3(0f, 0f, if (rel.z > 0) 1f else -1f)
+                                            Vec3(0f, 0f, if (normRelZ > 0) 1f else -1f)
                                     }
+                                    val offset = Vec3(
+                                        normal.x * (extentX * 0.5f + 0.5f),
+                                        normal.y * (extentY * 0.5f + 0.5f),
+                                        normal.z * (extentZ * 0.5f + 0.5f)
+                                    )
                                     val placePos = Vec3(
-                                        Math.round(center.x + normal.x).toFloat(),
-                                        Math.round(center.y + normal.y).toFloat().coerceAtLeast(0f),
-                                        Math.round(center.z + normal.z).toFloat()
+                                        Math.round(center.x + offset.x).toFloat(),
+                                        Math.round(center.y + offset.y).toFloat().coerceAtLeast(0f),
+                                        Math.round(center.z + offset.z).toFloat()
                                     )
                                     viewModel.addBlockAt(placePos)
                                 } else {

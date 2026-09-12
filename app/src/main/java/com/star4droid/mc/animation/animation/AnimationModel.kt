@@ -12,7 +12,29 @@ enum class ActionBlockType(val displayName: String, val defaultDuration: Float) 
     SLIDE_TO_POS("Slide to Pos", 2.0f),
     MOVE_TO_POS("Move to Pos", 1.0f),
     SCALE("Scale", 1.5f),
-    ANIMATION_CLIP("Animation Clip", 3.0f)
+    ANIMATION_CLIP("Animation Clip", 3.0f),
+    ROTATE("Rotate", 1.0f),
+    TILT_HEAD("Tilt Head", 1.0f),
+    PUNCH("Punch", 0.8f),
+    LOOK_LEFT("Look Left", 0.8f),
+    LOOK_RIGHT("Look Right", 0.8f),
+    BACKFLIP("Backflip", 1.2f),
+    JUMP_FRONT("Jump Front", 1.0f),
+    SIT_DOWN("Sit Down", 1.2f),
+    STAND_UP("Stand Up", 1.0f),
+    KICK("Kick", 0.8f),
+    NOD_HEAD("Nod Head", 1.0f),
+    SHAKE_HEAD("Shake Head", 1.0f),
+    CLAP("Clap", 1.5f),
+    CHEER("Cheer", 1.5f),
+    SHRUG("Shrug", 1.0f),
+    CROSS_ARMS("Cross Arms", 1.0f),
+    BOW("Bow", 1.5f),
+    DEATH_FALL("Death Fall", 1.5f),
+    SNEAK_WALK("Sneak Walk", 2.0f),
+    SPIN_ATTACK("Spin Attack", 1.0f),
+    BLOCK_SHIELD("Block Shield", 1.0f),
+    TAUNT("Taunt", 1.2f)
 }
 
 data class ActionBlock(
@@ -31,7 +53,10 @@ data class ActionBlock(
     var stepSize: Float = 1.0f,
     var hasCustomSettings: Boolean = false,
     var scaleVector: Vec3 = Vec3(1f, 1f, 1f),
-    var clipFileName: String? = null
+    var clipFileName: String? = null,
+    var angle: Float = 90f,
+    var jumpHeight: Float = 1.5f,
+    var amplitude: Float = 1.0f
 ) {
     fun copyBlock(): ActionBlock = copy(id = UUID.randomUUID().toString())
 }

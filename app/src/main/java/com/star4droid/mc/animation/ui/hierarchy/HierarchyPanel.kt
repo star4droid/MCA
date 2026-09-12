@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -56,6 +57,7 @@ fun HierarchyPanel(
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
+    val horizontalScrollState = rememberScrollState()
 
     Column(
         modifier = modifier
@@ -98,6 +100,7 @@ fun HierarchyPanel(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .horizontalScroll(horizontalScrollState)
                 .verticalScroll(scrollState)
         ) {
             for (rootId in sceneGraph.rootNodeIds) {

@@ -137,6 +137,37 @@ class SceneRenderer(
         GLES20.glUniform3fv(s.uAmbientColor, 1, ambientColor, 0)
         GLES20.glUniform4f(s.uSelectionColor, 0.2f, 0.8f, 1.0f, 1.0f)
 
+        // Bind dynamic scene lights (Point/Spot)
+        val lightNodes = sceneGraph.getAllNodes().filter { it.type == SceneNodeType.LIGHT && it.visible }.take(4)
+        GLES20.glUniform1i(s.uNumPointLights, lightNodes.size)
+        if (lightNodes.isNotEmpty()) {
+            val positions = FloatArray(lightNodes.size * 3)
+            val colors = FloatArray(lightNodes.size * 3)
+            val intensities = FloatArray(lightNodes.size)
+            val ranges = FloatArray(lightNodes.size)
+
+            lightNodes.forEachIndexed { i, lightNode ->
+                val p = lightNode.getWorldPosition()
+                positions[i * 3] = p.x
+                positions[i * 3 + 1] = p.y
+                positions[i * 3 + 2] = p.z
+
+                val ld = lightNode.lightData ?: com.star4droid.mc.animation.engine.scene.LightData()
+                val cInt = ld.color
+                colors[i * 3] = ((cInt shr 16) and 0xFF) / 255f
+                colors[i * 3 + 1] = ((cInt shr 8) and 0xFF) / 255f
+                colors[i * 3 + 2] = (cInt and 0xFF) / 255f
+
+                intensities[i] = ld.intensity
+                ranges[i] = ld.range
+            }
+
+            GLES20.glUniform3fv(s.uPointLightPos, lightNodes.size, positions, 0)
+            GLES20.glUniform3fv(s.uPointLightColor, lightNodes.size, colors, 0)
+            GLES20.glUniform1fv(s.uPointLightIntensity, lightNodes.size, intensities, 0)
+            GLES20.glUniform1fv(s.uPointLightRange, lightNodes.size, ranges, 0)
+        }
+
         // 3. Render Ground Grid
         renderGrid(s, grid, viewProjMatrix)
 

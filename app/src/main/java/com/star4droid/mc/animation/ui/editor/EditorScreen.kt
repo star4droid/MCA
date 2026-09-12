@@ -678,6 +678,18 @@ fun EditorScreen(
             )
         }
 
+        // File Browser Dialog
+        if (uiState.isFileBrowserOpen) {
+            FileBrowserDialog(
+                onDismiss = { viewModel.toggleFileBrowser() },
+                onFileSelected = { file ->
+                    if (file.extension.lowercase() == "obj") {
+                        viewModel.importObjFile(file)
+                    }
+                }
+            )
+        }
+
         // Scene Manager Dialog
         if (uiState.isSceneManagerOpen) {
             SceneManagerDialog(
