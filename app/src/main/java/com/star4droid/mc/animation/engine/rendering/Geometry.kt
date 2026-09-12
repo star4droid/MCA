@@ -237,4 +237,52 @@ object Geometry {
 
         return Mesh(vBuf, iBuf, indices.size)
     }
+
+    fun createCameraFrustumMesh(fovDegrees: Float = 60f, aspect: Float = 16f / 9f, dist: Float = 2.2f): Mesh {
+        val halfFovRad = Math.toRadians((fovDegrees * 0.5f).toDouble())
+        val h = (dist * kotlin.math.tan(halfFovRad)).toFloat()
+        val w = h * aspect
+
+        // 7 vertices with (pos.xyz, normal.xyz, uv.xy)
+        val vertices = floatArrayOf(
+            // 0: Apex (camera position / lens)
+            0f, 0f, 0f,           0f, 1f, 0f,  0f, 0f,
+            // 1: Top-Left
+            -w,  h, -dist,        0f, 1f, 0f,  0f, 0f,
+            // 2: Top-Right
+            w,  h, -dist,         0f, 1f, 0f,  0f, 0f,
+            // 3: Bottom-Right
+            w, -h, -dist,         0f, 1f, 0f,  0f, 0f,
+            // 4: Bottom-Left
+            -w, -h, -dist,        0f, 1f, 0f,  0f, 0f,
+            // 5: Top notch apex (up orientation)
+            0f, h + 0.35f, -dist, 0f, 1f, 0f,  0f, 0f,
+            // 6: Top notch center
+            0f, h, -dist,         0f, 1f, 0f,  0f, 0f
+        )
+
+        val indices = shortArrayOf(
+            0, 1,
+            0, 2,
+            0, 3,
+            0, 4,
+            1, 2,
+            2, 3,
+            3, 4,
+            4, 1,
+            6, 5
+        )
+
+        val vBuf = ByteBuffer.allocateDirect(vertices.size * 4).run {
+            order(ByteOrder.nativeOrder())
+            asFloatBuffer().apply { put(vertices); position(0) }
+        }
+
+        val iBuf = ByteBuffer.allocateDirect(indices.size * 2).run {
+            order(ByteOrder.nativeOrder())
+            asShortBuffer().apply { put(indices); position(0) }
+        }
+
+        return Mesh(vBuf, iBuf, indices.size)
+    }
 }

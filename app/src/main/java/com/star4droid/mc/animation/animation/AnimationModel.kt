@@ -10,7 +10,9 @@ enum class ActionBlockType(val displayName: String, val defaultDuration: Float) 
     JUMP("Jump", 1.0f),
     WAVE("Wave", 1.5f),
     SLIDE_TO_POS("Slide to Pos", 2.0f),
-    MOVE_TO_POS("Move to Pos", 1.0f)
+    MOVE_TO_POS("Move to Pos", 1.0f),
+    SCALE("Scale", 1.5f),
+    ANIMATION_CLIP("Animation Clip", 3.0f)
 }
 
 data class ActionBlock(
@@ -23,7 +25,13 @@ data class ActionBlock(
     var trackRow: Int = 0,
     var targetPosition: Vec3 = Vec3(0f, 0f, 0f),
     var startPosition: Vec3? = null,
-    var speed: Float = 1.0f
+    var speed: Float = 1.0f,
+    var enablePositionMove: Boolean = false,
+    var moveVector: Vec3 = Vec3(0f, 0f, 2f),
+    var stepSize: Float = 1.0f,
+    var hasCustomSettings: Boolean = false,
+    var scaleVector: Vec3 = Vec3(1f, 1f, 1f),
+    var clipFileName: String? = null
 ) {
     fun copyBlock(): ActionBlock = copy(id = UUID.randomUUID().toString())
 }

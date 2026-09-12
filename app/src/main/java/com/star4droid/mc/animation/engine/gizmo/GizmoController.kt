@@ -184,15 +184,49 @@ class GizmoController(
                 selectedNode.animatedTransform = selectedNode.baseTransform.copyTransform()
             }
             EditorMode.SCALE -> {
-                // Scaling can be done to entire body only
                 val targetNode = targetScaleNode ?: selectedNode
-                val s = (delta.x + delta.y + delta.z) * 0.5f
-                val uniformFactor = (1.0f + s).coerceAtLeast(0.1f)
-                val newScale = Vec3(
-                    (initT.scale.x * uniformFactor).coerceIn(0.1f, 10f),
-                    (initT.scale.y * uniformFactor).coerceIn(0.1f, 10f),
-                    (initT.scale.z * uniformFactor).coerceIn(0.1f, 10f)
-                )
+                val isCharacter = targetScaleNode != null || selectedNode.type == SceneNodeType.CHARACTER_ROOT || selectedNode.type == SceneNodeType.CHARACTER_PART
+                val newScale = if (isCharacter) {
+                    val s = when (activeAxis) {
+                        GizmoAxis.X -> delta.x
+                        GizmoAxis.Y -> delta.y
+                        GizmoAxis.Z -> delta.z
+                        GizmoAxis.CENTER -> (delta.x + delta.y + delta.z) * 0.5f
+                        else -> (delta.x + delta.y + delta.z) * 0.5f
+                    }
+                    val uniformFactor = (1.0f + s * 0.8f).coerceAtLeast(0.05f)
+                    Vec3(
+                        (initT.scale.x * uniformFactor).coerceIn(0.05f, 20f),
+                        (initT.scale.y * uniformFactor).coerceIn(0.05f, 20f),
+                        (initT.scale.z * uniformFactor).coerceIn(0.05f, 20f)
+                    )
+                } else {
+                    // For blocks, props, cubes: support precise per-axis scaling and center uniform scaling
+                    when (activeAxis) {
+                        GizmoAxis.X -> {
+                            val factor = (1.0f + delta.x * 0.8f).coerceAtLeast(0.05f)
+                            initT.scale.copy(x = (initT.scale.x * factor).coerceIn(0.05f, 20f))
+                        }
+                        GizmoAxis.Y -> {
+                            val factor = (1.0f + delta.y * 0.8f).coerceAtLeast(0.05f)
+                            initT.scale.copy(y = (initT.scale.y * factor).coerceIn(0.05f, 20f))
+                        }
+                        GizmoAxis.Z -> {
+                            val factor = (1.0f + delta.z * 0.8f).coerceAtLeast(0.05f)
+                            initT.scale.copy(z = (initT.scale.z * factor).coerceIn(0.05f, 20f))
+                        }
+                        GizmoAxis.CENTER -> {
+                            val s = (delta.x + delta.y + delta.z) * 0.5f
+                            val factor = (1.0f + s * 0.8f).coerceAtLeast(0.05f)
+                            Vec3(
+                                (initT.scale.x * factor).coerceIn(0.05f, 20f),
+                                (initT.scale.y * factor).coerceIn(0.05f, 20f),
+                                (initT.scale.z * factor).coerceIn(0.05f, 20f)
+                            )
+                        }
+                        else -> initT.scale
+                    }
+                }
                 targetNode.baseTransform = initT.copy(scale = newScale)
                 targetNode.animatedTransform = targetNode.baseTransform.copyTransform()
             }

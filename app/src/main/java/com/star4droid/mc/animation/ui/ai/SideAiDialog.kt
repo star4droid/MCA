@@ -208,6 +208,7 @@ fun SideAiDialog(
                                     }
                                     historyOfNodeIds = emptyList()
                                     lastResult = AiExecutionResult(true, "Undid previous AI generation.")
+                                    viewModel.saveProject()
                                     viewModel.triggerRecomposition()
                                 },
                                 colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFEF4444)),
@@ -241,7 +242,9 @@ fun SideAiDialog(
                                     lastResult = result
                                     if (result.createdNodeIds.isNotEmpty()) {
                                         historyOfNodeIds = result.createdNodeIds
+                                        viewModel.selectNode(result.createdNodeIds.first())
                                     }
+                                    viewModel.saveProject()
                                     viewModel.triggerRecomposition()
                                 }
                             }

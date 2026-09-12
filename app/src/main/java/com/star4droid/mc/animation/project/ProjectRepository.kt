@@ -1,6 +1,8 @@
 package com.star4droid.mc.animation.project
 
 import android.content.Context
+import com.star4droid.mc.animation.animation.ActionBlock
+import com.star4droid.mc.animation.animation.ActionBlockType
 import com.star4droid.mc.animation.animation.AnimationTrack
 import com.star4droid.mc.animation.animation.Interpolation
 import com.star4droid.mc.animation.animation.Keyframe
@@ -135,22 +137,13 @@ class ProjectRepository(private val context: Context) {
         instances.add(TimelineInstance(timelineAssetId = mainTimeline.id))
 
         if (template == "steve") {
-            // Add Steve Character
-            val steveId = CharacterFactory.addCharacterToScene(
+            // Add Steve Character in default rest pose
+            CharacterFactory.addCharacterToScene(
                 sceneGraph = sceneGraph,
                 name = "Steve",
                 isAlex = false,
                 skinId = "steve",
                 position = Vec3(0f, 0f, 0f)
-            )
-
-            // Add sample Walk keyframes
-            PresetGenerator.applyPreset(
-                sceneGraph = sceneGraph,
-                selectedNodeId = steveId,
-                timeline = mainTimeline,
-                presetType = PresetType.WALK,
-                startTime = 0f
             )
         }
 
@@ -497,6 +490,18 @@ class ProjectRepository(private val context: Context) {
         )
     )
 
+    private fun serializeVec3(v: Vec3): JSONObject = JSONObject().apply {
+        put("x", v.x.toDouble())
+        put("y", v.y.toDouble())
+        put("z", v.z.toDouble())
+    }
+
+    private fun deserializeVec3(obj: JSONObject): Vec3 = Vec3(
+        obj.optDouble("x", 0.0).toFloat(),
+        obj.optDouble("y", 0.0).toFloat(),
+        obj.optDouble("z", 0.0).toFloat()
+    )
+
     private fun serializeTimeline(tl: TimelineAsset): JSONObject = JSONObject().apply {
         put("id", tl.id)
         put("name", tl.name)
@@ -520,7 +525,114 @@ class ProjectRepository(private val context: Context) {
             })
         }
         put("tracks", tracksArr)
+
+        val blocksArr = JSONArray()
+        for (block in tl.actionBlocks) {
+            blocksArr.put(JSONObject().apply {
+                put("id", block.id)
+                put("name", block.name)
+                put("type", block.type.name)
+                put("targetNodeId", block.targetNodeId)
+                put("startTime", block.startTime.toDouble())
+                put("duration", block.duration.toDouble())
+                put("trackRow", block.trackRow)
+                put("speed", block.speed.toDouble())
+                put("enablePositionMove", block.enablePositionMove)
+                put("stepSize", block.stepSize.toDouble())
+                put("hasCustomSettings", block.hasCustomSettings)
+                put("targetPosition", serializeVec3(block.targetPosition))
+                block.startPosition?.let { put("startPosition", serializeVec3(it)) }
+                put("moveVector", serializeVec3(block.moveVector))
+                put("scaleVector", serializeVec3(block.scaleVector))
+                block.clipFileName?.let { put("clipFileName", it) }
+            })
+        }
+        put("actionBlocks", blocksArr)
     }
+
+    fun saveAnimationFile(name: String, blocks: List<ActionBlock>): File {
+        val animDir = File(projectsDir, "saved_animations").apply { if (!exists()) mkdirs() }
+        val sanitized = name.replace(Regex("[^a-zA-Z0-9_-]"), "_")
+        val file = File(animDir, "$sanitized.mcanim")
+        val root = JSONObject().apply {
+            put("name", name)
+            put("version", 1)
+            val arr = JSONArray()
+            for (block in blocks) {
+                arr.put(JSONObject().apply {
+                    put("id", block.id)
+                    put("name", block.name)
+                    put("type", block.type.name)
+                    put("targetNodeId", block.targetNodeId)
+                    put("startTime", block.startTime.toDouble())
+                    put("duration", block.duration.toDouble())
+                    put("trackRow", block.trackRow)
+                    put("speed", block.speed.toDouble())
+                    put("enablePositionMove", block.enablePositionMove)
+                    put("stepSize", block.stepSize.toDouble())
+                    put("hasCustomSettings", block.hasCustomSettings)
+                    put("targetPosition", serializeVec3(block.targetPosition))
+                    block.startPosition?.let { put("startPosition", serializeVec3(it)) }
+                    put("moveVector", serializeVec3(block.moveVector))
+                    put("scaleVector", serializeVec3(block.scaleVector))
+                    block.clipFileName?.let { put("clipFileName", it) }
+                })
+            }
+            put("blocks", arr)
+        }
+        file.writeText(root.toString(2))
+        return file
+    }
+
+    fun loadAnimationFile(file: File): List<ActionBlock> {
+        if (!file.exists()) return emptyList()
+        val list = mutableListOf<ActionBlock>()
+        try {
+            val root = JSONObject(file.readText())
+            val arr = root.optJSONArray("blocks") ?: return emptyList()
+            for (i in 0 until arr.length()) {
+                val bObj = arr.getJSONObject(i)
+                val type = try {
+                    ActionBlockType.valueOf(bObj.optString("type", ActionBlockType.WALK.name))
+                } catch (e: Exception) { ActionBlockType.WALK }
+
+                val targetPos = bObj.optJSONObject("targetPosition")?.let { deserializeVec3(it) } ?: Vec3.ZERO
+                val startPos = bObj.optJSONObject("startPosition")?.let { deserializeVec3(it) }
+                val moveVec = bObj.optJSONObject("moveVector")?.let { deserializeVec3(it) } ?: Vec3(0f, 0f, 2f)
+                val scaleVec = bObj.optJSONObject("scaleVector")?.let { deserializeVec3(it) } ?: Vec3.ONE
+
+                val block = ActionBlock(
+                    id = UUID.randomUUID().toString(),
+                    name = bObj.optString("name", "${type.displayName} Block"),
+                    type = type,
+                    targetNodeId = bObj.optString("targetNodeId", ""),
+                    startTime = bObj.optDouble("startTime", 0.0).toFloat(),
+                    duration = bObj.optDouble("duration", type.defaultDuration.toDouble()).toFloat(),
+                    trackRow = bObj.optInt("trackRow", 0),
+                    speed = bObj.optDouble("speed", 1.0).toFloat(),
+                    enablePositionMove = bObj.optBoolean("enablePositionMove", false),
+                    stepSize = bObj.optDouble("stepSize", 1.0).toFloat(),
+                    hasCustomSettings = bObj.optBoolean("hasCustomSettings", false),
+                    targetPosition = targetPos,
+                    startPosition = startPos,
+                    moveVector = moveVec,
+                    scaleVector = scaleVec,
+                    clipFileName = bObj.optString("clipFileName").ifEmpty { null }
+                )
+                list.add(block)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return list
+    }
+
+    fun listSavedAnimations(): List<File> {
+        val animDir = File(projectsDir, "saved_animations").apply { if (!exists()) mkdirs() }
+        return (animDir.listFiles() ?: emptyArray()).filter { it.name.endsWith(".mcanim") }.sortedBy { it.name }
+    }
+
+    fun getSavedAnimationFiles(): List<File> = listSavedAnimations()
 
     private fun deserializeTimeline(obj: JSONObject): TimelineAsset {
         val id = obj.getString("id")
@@ -555,6 +667,41 @@ class ProjectRepository(private val context: Context) {
                     }
                 }
                 timeline.tracks.add(track)
+            }
+        }
+
+        val blocksArr = obj.optJSONArray("actionBlocks")
+        if (blocksArr != null) {
+            for (i in 0 until blocksArr.length()) {
+                val bObj = blocksArr.getJSONObject(i)
+                val type = try {
+                    ActionBlockType.valueOf(bObj.optString("type", ActionBlockType.WALK.name))
+                } catch (e: Exception) { ActionBlockType.WALK }
+
+                val targetPos = bObj.optJSONObject("targetPosition")?.let { deserializeVec3(it) } ?: Vec3.ZERO
+                val startPos = bObj.optJSONObject("startPosition")?.let { deserializeVec3(it) }
+                val moveVec = bObj.optJSONObject("moveVector")?.let { deserializeVec3(it) } ?: Vec3(0f, 0f, 2f)
+                val scaleVec = bObj.optJSONObject("scaleVector")?.let { deserializeVec3(it) } ?: Vec3.ONE
+
+                val block = ActionBlock(
+                    id = bObj.optString("id", UUID.randomUUID().toString()),
+                    name = bObj.optString("name", "${type.displayName} Block"),
+                    type = type,
+                    targetNodeId = bObj.optString("targetNodeId", ""),
+                    startTime = bObj.optDouble("startTime", 0.0).toFloat(),
+                    duration = bObj.optDouble("duration", type.defaultDuration.toDouble()).toFloat(),
+                    trackRow = bObj.optInt("trackRow", 0),
+                    speed = bObj.optDouble("speed", 1.0).toFloat(),
+                    enablePositionMove = bObj.optBoolean("enablePositionMove", false),
+                    stepSize = bObj.optDouble("stepSize", 1.0).toFloat(),
+                    hasCustomSettings = bObj.optBoolean("hasCustomSettings", false),
+                    targetPosition = targetPos,
+                    startPosition = startPos,
+                    moveVector = moveVec,
+                    scaleVector = scaleVec,
+                    clipFileName = bObj.optString("clipFileName").ifEmpty { null }
+                )
+                timeline.actionBlocks.add(block)
             }
         }
         return timeline

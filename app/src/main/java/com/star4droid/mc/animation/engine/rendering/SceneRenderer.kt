@@ -33,6 +33,7 @@ class SceneRenderer(
     private var headMesh: Mesh? = null
     private var gridMesh: Mesh? = null
     private var wireframeMesh: Mesh? = null
+    private var cameraFrustumMesh: Mesh? = null
     private val textureManager = TextureManager()
 
     var viewportWidth: Int = 1
@@ -59,6 +60,7 @@ class SceneRenderer(
         headMesh = Geometry.createHeadMesh(1f, 1f, 1f)
         gridMesh = Geometry.createGridMesh(30, 1.0f)
         wireframeMesh = Geometry.createBoundingWireframeMesh(1f, 1f, 1f)
+        cameraFrustumMesh = Geometry.createCameraFrustumMesh(60f, 16f / 9f, 2.2f)
     }
 
     override fun onSurfaceChanged(gl: GL10?, width: Int, height: Int) {
@@ -235,7 +237,7 @@ class SceneRenderer(
                     val eyePos = camera.getEyePosition()
                     val dist = node.getWorldPosition().distanceTo(eyePos)
                     if (dist > 0.45f) {
-                        renderMarker(s, cube, node.getWorldPosition(), viewProj, isSelected, 0.2f, 0.7f, 1.0f)
+                        renderCameraModelAndFrustum(s, cube, cameraFrustumMesh, node, viewProj, isSelected)
                     }
                 }
             }
@@ -245,6 +247,77 @@ class SceneRenderer(
             }
             else -> {}
         }
+    }
+
+    private fun renderCameraModelAndFrustum(
+        s: Shader,
+        cube: Mesh,
+        frustum: Mesh?,
+        node: SceneNode,
+        viewProj: FloatArray,
+        isSelected: Boolean
+    ) {
+        val nodeWorld = node.worldMatrix
+
+        // 1. Camera Body (Dark sleek slate matte chassis)
+        val bodyMat = nodeWorld * Mat4.scaling(0.42f, 0.32f, 0.48f)
+        drawMeshWithMatrix(s, cube, bodyMat, viewProj, isSelected, 0.16f, 0.20f, 0.26f)
+
+        // 2. Camera Front Lens Barrel (Deep dark barrel extending forward)
+        val lensMat = nodeWorld * Mat4.translation(Vec3(0f, 0f, -0.32f)) * Mat4.scaling(0.24f, 0.24f, 0.22f)
+        drawMeshWithMatrix(s, cube, lensMat, viewProj, isSelected, 0.08f, 0.10f, 0.14f)
+
+        // 3. Lens Front Ring Accent (Luminous Cyan accent ring)
+        val ringMat = nodeWorld * Mat4.translation(Vec3(0f, 0f, -0.44f)) * Mat4.scaling(0.26f, 0.26f, 0.04f)
+        drawMeshWithMatrix(s, cube, ringMat, viewProj, isSelected, 0.22f, 0.82f, 1.0f)
+
+        // 4. Top Film Reels / Viewfinder (Two vintage spool cylinders on top)
+        val reel1Mat = nodeWorld * Mat4.translation(Vec3(-0.09f, 0.22f, -0.06f)) * Mat4.scaling(0.16f, 0.12f, 0.16f)
+        drawMeshWithMatrix(s, cube, reel1Mat, viewProj, isSelected, 0.28f, 0.34f, 0.44f)
+
+        val reel2Mat = nodeWorld * Mat4.translation(Vec3(0.09f, 0.22f, 0.10f)) * Mat4.scaling(0.14f, 0.10f, 0.14f)
+        drawMeshWithMatrix(s, cube, reel2Mat, viewProj, isSelected, 0.28f, 0.34f, 0.44f)
+
+        // 5. Perspective Frustum Lines (Wireframe FOV view cone radiating into 3D scene)
+        if (frustum != null) {
+            val frustumMat = nodeWorld * Mat4.translation(Vec3(0f, 0f, -0.44f))
+            System.arraycopy(frustumMat.values, 0, modelMatrix, 0, 16)
+            Matrix.multiplyMM(mvpMatrix, 0, viewProj, 0, modelMatrix, 0)
+
+            GLES20.glUniformMatrix4fv(s.uMVPMatrix, 1, false, mvpMatrix, 0)
+            GLES20.glUniformMatrix4fv(s.uModelMatrix, 1, false, modelMatrix, 0)
+            val lineR = if (isSelected) 1.0f else 0.22f
+            val lineG = if (isSelected) 0.85f else 0.82f
+            val lineB = if (isSelected) 0.2f else 1.0f
+            GLES20.glUniform4f(s.uObjectColor, lineR, lineG, lineB, 0.85f)
+            GLES20.glUniform1f(s.uIsSelected, if (isSelected) 1f else 0f)
+            GLES20.glUniform1f(s.uUseTexture, 0f)
+
+            bindMesh(s, frustum)
+            GLES20.glLineWidth(2.5f)
+            GLES20.glDrawElements(GLES20.GL_LINES, frustum.indexCount, GLES20.GL_UNSIGNED_SHORT, frustum.indexBuffer)
+        }
+    }
+
+    private fun drawMeshWithMatrix(
+        s: Shader,
+        mesh: Mesh,
+        matrix: Mat4,
+        viewProj: FloatArray,
+        isSelected: Boolean,
+        r: Float, g: Float, b: Float
+    ) {
+        System.arraycopy(matrix.values, 0, modelMatrix, 0, 16)
+        Matrix.multiplyMM(mvpMatrix, 0, viewProj, 0, modelMatrix, 0)
+
+        GLES20.glUniformMatrix4fv(s.uMVPMatrix, 1, false, mvpMatrix, 0)
+        GLES20.glUniformMatrix4fv(s.uModelMatrix, 1, false, modelMatrix, 0)
+        GLES20.glUniform4f(s.uObjectColor, r, g, b, 1.0f)
+        GLES20.glUniform1f(s.uIsSelected, if (isSelected) 1f else 0f)
+        GLES20.glUniform1f(s.uUseTexture, 0f)
+
+        bindMesh(s, mesh)
+        GLES20.glDrawElements(GLES20.GL_TRIANGLES, mesh.indexCount, GLES20.GL_UNSIGNED_SHORT, mesh.indexBuffer)
     }
 
     private fun renderMarker(

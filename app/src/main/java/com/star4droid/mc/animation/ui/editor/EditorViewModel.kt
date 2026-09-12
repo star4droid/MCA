@@ -45,6 +45,14 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.util.UUID
 
+data class ActionBlockGlobalSettings(
+    val enablePositionMove: Boolean = false,
+    val moveVector: Vec3 = Vec3(0f, 0f, 2f),
+    val stepSize: Float = 1.0f,
+    val speed: Float = 1.0f,
+    val duration: Float = 2.0f
+)
+
 data class SceneItem(
     val id: String = UUID.randomUUID().toString(),
     var name: String = "Scene 1",
@@ -71,6 +79,7 @@ data class EditorUiState(
     val isSceneCameraActive: Boolean = false,
     val isWorldBuildingMode: Boolean = false,
     val worldBuildingTool: WorldBuildingTool = WorldBuildingTool.ADD,
+    val worldBuildingParentId: String? = null,
     val selectedBlockTexture: String = "grass",
     val isFileBrowserOpen: Boolean = false,
     val isSideAiOpen: Boolean = false,
@@ -194,15 +203,47 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         triggerRecomposition()
     }
 
+    private var cameraAnimJob: Job? = null
+
     fun resetCameraToCenter() {
-        camera.resetToStartAndCenter()
+        cameraAnimJob?.cancel()
+        val startTarget = camera.target.copy()
+        val startDist = camera.distance
+        val startYaw = camera.yaw
+        val startPitch = camera.pitch
+        val destTarget = Vec3(0f, 1f, 0f)
+        val destDist = 6.0f
+        val destYaw = 45.0f
+        val destPitch = 25.0f
+
+        camera.isUsingSceneCamera = false
         _uiState.value = _uiState.value.copy(
             isSceneCameraActive = false,
             editorMode = if (_uiState.value.editorMode == EditorMode.CAMERA) EditorMode.SELECT else _uiState.value.editorMode,
             version = System.currentTimeMillis()
         )
         gizmoController.currentMode = _uiState.value.editorMode
-        triggerRecomposition()
+
+        cameraAnimJob = viewModelScope.launch {
+            val durationMs = 350L
+            val startTime = System.currentTimeMillis()
+            while (isActive) {
+                val elapsed = System.currentTimeMillis() - startTime
+                val progress = (elapsed.toFloat() / durationMs).coerceIn(0f, 1f)
+                val t = if (progress < 0.5f) 2f * progress * progress else -1f + (4f - 2f * progress) * progress
+                camera.target = Vec3(
+                    startTarget.x + (destTarget.x - startTarget.x) * t,
+                    startTarget.y + (destTarget.y - startTarget.y) * t,
+                    startTarget.z + (destTarget.z - startTarget.z) * t
+                )
+                camera.distance = startDist + (destDist - startDist) * t
+                camera.yaw = startYaw + (destYaw - startYaw) * t
+                camera.pitch = startPitch + (destPitch - startPitch) * t
+                triggerRecomposition()
+                if (progress >= 1f) break
+                delay(16)
+            }
+        }
     }
 
     fun setTimeOfDay(timeOfDay: TimeOfDay) {
@@ -282,6 +323,25 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         _uiState.value = _uiState.value.copy(version = System.currentTimeMillis())
     }
 
+    private val globalBlockSettings = mutableMapOf<ActionBlockType, ActionBlockGlobalSettings>()
+
+    fun getGlobalSettings(type: ActionBlockType): ActionBlockGlobalSettings {
+        return globalBlockSettings.getOrPut(type) {
+            ActionBlockGlobalSettings(
+                enablePositionMove = false,
+                moveVector = when (type) {
+                    ActionBlockType.WALK -> Vec3(0f, 0f, 3f)
+                    ActionBlockType.RUN -> Vec3(0f, 0f, 5f)
+                    ActionBlockType.JUMP -> Vec3(0f, 0f, 2f)
+                    else -> Vec3(0f, 0f, 2f)
+                },
+                stepSize = 1.0f,
+                speed = 1.0f,
+                duration = type.defaultDuration
+            )
+        }
+    }
+
     // --- Action Block Management ---
     fun addActionBlock(type: ActionBlockType) {
         val activeTl = getActiveTimeline() ?: return
@@ -305,51 +365,55 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         }
         val targetId = targetNode.id
 
-        val nextStartTime = if (activeTl.actionBlocks.isNotEmpty()) {
-            activeTl.actionBlocks.maxOf { it.startTime + it.duration }
-        } else {
-            0f
-        }
+        // USER REQUEST: Add in pointer position
+        val startTime = _uiState.value.currentTime
 
-        // Chain from previous block's end position if available
-        val prevBlocks = activeTl.actionBlocks.filter { it.targetNodeId == targetId }
-        val startPos = if (prevBlocks.isNotEmpty()) {
-            val lastBlock = prevBlocks.maxByOrNull { it.startTime }!!
-            lastBlock.targetPosition.copy()
-        } else {
-            targetNode.baseTransform.position.copy()
-        }
+        val global = getGlobalSettings(type)
+        val duration = global.duration
+        val endTime = startTime + duration
 
-        val targetOffset = when (type) {
-            ActionBlockType.WALK -> Vec3(0f, 0f, 4f)
-            ActionBlockType.RUN -> Vec3(0f, 0f, 6f)
-            ActionBlockType.JUMP -> Vec3(0f, 0f, 2f)
-            ActionBlockType.SLIDE_TO_POS -> Vec3(3f, 0f, 0f)
-            ActionBlockType.MOVE_TO_POS -> Vec3(0f, 0f, 3f)
-            else -> Vec3(0f, 0f, 0f)
+        // USER REQUEST: When user add block and there's block in the pointer, add it under until there's no one
+        var targetRow = 0
+        while (true) {
+            val collision = activeTl.actionBlocks.any { b ->
+                b.trackRow == targetRow && !(endTime <= b.startTime || startTime >= (b.startTime + b.duration))
+            }
+            if (!collision) break
+            targetRow++
         }
 
         val block = ActionBlock(
             name = "${targetNode.name} ${type.displayName}",
             type = type,
             targetNodeId = targetId,
-            startTime = nextStartTime,
-            duration = type.defaultDuration,
-            trackRow = (activeTl.actionBlocks.size) % 3,
-            startPosition = startPos,
-            targetPosition = startPos + targetOffset
+            startTime = startTime,
+            duration = duration,
+            trackRow = targetRow,
+            speed = global.speed,
+            enablePositionMove = global.enablePositionMove,
+            moveVector = global.moveVector.copy(),
+            scaleVector = targetNode.baseTransform.scale.copy(),
+            stepSize = global.stepSize,
+            hasCustomSettings = false,
+            startPosition = targetNode.baseTransform.position.copy(),
+            targetPosition = targetNode.baseTransform.position + global.moveVector
         )
         activeTl.addActionBlock(block)
         SoundPlayer.playSound(SoundPlayer.SoundType.POP)
         evaluateAnimation(_uiState.value.currentTime)
+        saveProject()
         triggerRecomposition()
     }
 
     fun removeActionBlock(blockId: String) {
         val activeTl = getActiveTimeline() ?: return
-        activeTl.removeActionBlock(blockId)
-        evaluateAnimation(_uiState.value.currentTime)
-        triggerRecomposition()
+        val removed = activeTl.removeActionBlock(blockId)
+        if (removed) {
+            SoundPlayer.playSound(SoundPlayer.SoundType.POP)
+            evaluateAnimation(_uiState.value.currentTime)
+            saveProject()
+            triggerRecomposition()
+        }
     }
 
     fun updateActionBlock(block: ActionBlock) {
@@ -358,6 +422,51 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         if (idx >= 0) {
             activeTl.actionBlocks[idx] = block
         }
+        evaluateAnimation(_uiState.value.currentTime)
+        saveProject()
+        triggerRecomposition()
+    }
+
+    fun applyActionBlockSettings(block: ActionBlock, applyToAll: Boolean) {
+        val activeTl = getActiveTimeline() ?: return
+        if (applyToAll) {
+            globalBlockSettings[block.type] = ActionBlockGlobalSettings(
+                enablePositionMove = block.enablePositionMove,
+                moveVector = block.moveVector.copy(),
+                stepSize = block.stepSize,
+                speed = block.speed,
+                duration = block.duration
+            )
+            for (b in activeTl.actionBlocks) {
+                if (b.type == block.type && (!b.hasCustomSettings || b.id == block.id)) {
+                    b.enablePositionMove = block.enablePositionMove
+                    b.moveVector = block.moveVector.copy()
+                    b.stepSize = block.stepSize
+                    b.speed = block.speed
+                    b.duration = block.duration
+                }
+            }
+        } else {
+            block.hasCustomSettings = true
+            val idx = activeTl.actionBlocks.indexOfFirst { it.id == block.id }
+            if (idx >= 0) {
+                activeTl.actionBlocks[idx] = block
+            }
+        }
+        evaluateAnimation(_uiState.value.currentTime)
+        triggerRecomposition()
+    }
+
+    fun removeCustomSettingsFromBlock(blockId: String) {
+        val activeTl = getActiveTimeline() ?: return
+        val block = activeTl.actionBlocks.find { it.id == blockId } ?: return
+        val global = getGlobalSettings(block.type)
+        block.enablePositionMove = global.enablePositionMove
+        block.moveVector = global.moveVector.copy()
+        block.stepSize = global.stepSize
+        block.speed = global.speed
+        block.duration = global.duration
+        block.hasCustomSettings = false
         evaluateAnimation(_uiState.value.currentTime)
         triggerRecomposition()
     }
@@ -433,6 +542,10 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         _uiState.value = _uiState.value.copy(selectedBlockTexture = textureId)
     }
 
+    fun setWorldBuildingParent(parentId: String?) {
+        _uiState.value = _uiState.value.copy(worldBuildingParentId = parentId)
+    }
+
     fun addBlockAtCursor() {
         val snapX = Math.round(camera.target.x).toFloat()
         val snapY = Math.round(camera.target.y.coerceAtLeast(0f)).toFloat()
@@ -442,6 +555,7 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
 
     fun addBlockAt(position: Vec3, textureId: String = _uiState.value.selectedBlockTexture) {
         val id = UUID.randomUUID().toString()
+        val parentId = _uiState.value.worldBuildingParentId
         val node = SceneNode(
             id = id,
             name = "Block ${sceneGraph.nodes.size + 1}",
@@ -451,10 +565,11 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
             material = Material(textureAssetId = textureId),
             boxDimensions = Vec3.ONE
         )
-        historyManager.executeCommand(AddNodeCommand(sceneGraph, node, null))
+        historyManager.executeCommand(AddNodeCommand(sceneGraph, node, parentId))
         selectNode(node.id)
         SoundPlayer.playSound(SoundPlayer.SoundType.STEP)
         updateHistoryState()
+        saveProject()
     }
 
     fun removeBlock(nodeId: String) {
@@ -724,7 +839,12 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
 
     // --- Persistence ---
     fun saveProject() {
-        val meta = projectMetadata ?: return
+        val meta = projectMetadata ?: ProjectMetadata(
+            id = UUID.randomUUID().toString(),
+            name = _uiState.value.projectName,
+            createdAt = System.currentTimeMillis(),
+            updatedAt = System.currentTimeMillis()
+        ).also { projectMetadata = it }
         projectRepository.saveProject(
             id = meta.id,
             metadata = meta,
@@ -732,11 +852,54 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
             timelines = timelines,
             timelineInstances = timelineInstances
         )
-        SoundPlayer.playSound(SoundPlayer.SoundType.DING)
-        _uiState.value = _uiState.value.copy(saveMessage = "Project saved successfully!")
+        _uiState.value = _uiState.value.copy(saveMessage = "Saved")
+        viewModelScope.launch {
+            delay(1500)
+            if (_uiState.value.saveMessage == "Saved") {
+                _uiState.value = _uiState.value.copy(saveMessage = null)
+            }
+        }
+    }
+
+    // --- Animation Import & Export ---
+    fun exportCurrentAnimation(name: String) {
+        val activeTl = getActiveTimeline() ?: return
+        projectRepository.saveAnimationFile(name, activeTl.actionBlocks)
+        _uiState.value = _uiState.value.copy(saveMessage = "Exported '$name'!")
         viewModelScope.launch {
             delay(2000)
             _uiState.value = _uiState.value.copy(saveMessage = null)
+        }
+    }
+
+    fun getSavedAnimationFiles(): List<java.io.File> {
+        return projectRepository.getSavedAnimationFiles()
+    }
+
+    fun importAnimation(file: java.io.File) {
+        val activeTl = getActiveTimeline() ?: return
+        val imported = projectRepository.loadAnimationFile(file)
+        if (imported.isNotEmpty()) {
+            val pointer = _uiState.value.currentTime
+            val baseTime = imported.minOfOrNull { it.startTime } ?: 0f
+            val targetNode = _uiState.value.selectedNodeId?.let { sceneGraph.getNode(it) }
+            for (b in imported) {
+                val shiftedStartTime = pointer + (b.startTime - baseTime)
+                val newBlock = b.copy(
+                    id = UUID.randomUUID().toString(),
+                    startTime = shiftedStartTime,
+                    targetNodeId = targetNode?.id ?: b.targetNodeId
+                )
+                activeTl.addActionBlock(newBlock)
+            }
+            evaluateAnimation(pointer)
+            saveProject()
+            triggerRecomposition()
+            _uiState.value = _uiState.value.copy(saveMessage = "Imported ${file.nameWithoutExtension}!")
+            viewModelScope.launch {
+                delay(2000)
+                _uiState.value = _uiState.value.copy(saveMessage = null)
+            }
         }
     }
 }

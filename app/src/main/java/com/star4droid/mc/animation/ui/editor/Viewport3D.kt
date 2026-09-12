@@ -17,9 +17,13 @@ import com.star4droid.mc.animation.engine.gizmo.EditorMode
 import com.star4droid.mc.animation.engine.gizmo.GizmoAxis
 import com.star4droid.mc.animation.engine.gizmo.GizmoController
 import com.star4droid.mc.animation.engine.math.Ray
+import com.star4droid.mc.animation.engine.math.Vec3
 import com.star4droid.mc.animation.engine.rendering.SceneRenderer
 import com.star4droid.mc.animation.engine.scene.SceneGraph
+import com.star4droid.mc.animation.engine.scene.SceneNode
+import com.star4droid.mc.animation.ui.world.WorldBuildingTool
 import kotlin.math.abs
+import kotlin.math.hypot
 
 @SuppressLint("ClickableViewAccessibility")
 @Composable
@@ -31,6 +35,7 @@ fun Viewport3D(
     val glView = remember {
         EditorGLSurfaceView(
             context = context,
+            viewModel = viewModel,
             sceneGraph = viewModel.sceneGraph,
             camera = viewModel.camera,
             gizmoController = viewModel.gizmoController,
@@ -59,6 +64,7 @@ fun Viewport3D(
 @SuppressLint("ViewConstructor")
 class EditorGLSurfaceView(
     context: Context,
+    val viewModel: EditorViewModel,
     val sceneGraph: SceneGraph,
     val camera: EditorCamera,
     val gizmoController: GizmoController,
@@ -70,12 +76,31 @@ class EditorGLSurfaceView(
 
     private var previousX: Float = 0f
     private var previousY: Float = 0f
+    private var touchStartX: Float = 0f
+    private var touchStartY: Float = 0f
+    private var hasMoved = false
+    private var wasMultiTouch = false
     private var isDraggingGizmo = false
+    private var activePointerId: Int = MotionEvent.INVALID_POINTER_ID
+    private var isScaling = false
+    private var skipNextDrag = false
 
     private val scaleDetector = ScaleGestureDetector(context, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+        override fun onScaleBegin(detector: ScaleGestureDetector): Boolean {
+            isScaling = true
+            wasMultiTouch = true
+            return true
+        }
+
         override fun onScale(detector: ScaleGestureDetector): Boolean {
             camera.zoom(1.0f / detector.scaleFactor)
             return true
+        }
+
+        override fun onScaleEnd(detector: ScaleGestureDetector) {
+            isScaling = false
+            skipNextDrag = true
+            wasMultiTouch = true
         }
     })
 
@@ -88,27 +113,34 @@ class EditorGLSurfaceView(
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
         scaleDetector.onTouchEvent(event)
-        if (scaleDetector.isInProgress) return true
-
-        val x = event.x
-        val y = event.y
+        if (scaleDetector.isInProgress || isScaling) {
+            skipNextDrag = true
+            wasMultiTouch = true
+            return true
+        }
 
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                previousX = x
-                previousY = y
+                activePointerId = event.getPointerId(0)
+                previousX = event.x
+                previousY = event.y
+                touchStartX = event.x
+                touchStartY = event.y
+                hasMoved = false
+                wasMultiTouch = false
+                skipNextDrag = false
 
-                // Raycast to check if gizmo or object was hit
+                // If gizmo is active, check gizmo drag hit
                 val ray = Ray.fromScreen(
-                    screenX = x,
-                    screenY = y,
+                    screenX = event.x,
+                    screenY = event.y,
                     viewportWidth = renderer.viewportWidth.toFloat(),
                     viewportHeight = renderer.viewportHeight.toFloat(),
                     invViewProj = renderer.invViewProjMatrix
                 )
 
                 val selectedNode = renderer.selectedNodeId?.let { sceneGraph.getNode(it) }
-                if (selectedNode != null && gizmoController.currentMode != EditorMode.SELECT && !camera.isUsingSceneCamera) {
+                if (selectedNode != null && gizmoController.currentMode != EditorMode.SELECT && !camera.isUsingSceneCamera && !viewModel.uiState.value.isWorldBuildingMode) {
                     val axis = gizmoController.checkAxisHit(ray, selectedNode.getWorldPosition())
                     if (axis != GizmoAxis.NONE) {
                         gizmoController.startDrag(selectedNode, axis, ray)
@@ -116,34 +148,64 @@ class EditorGLSurfaceView(
                         return true
                     }
                 }
+            }
 
-                // Check hit against scene nodes for selection
-                var closestNodeId: String? = null
-                var closestDist = Float.POSITIVE_INFINITY
+            MotionEvent.ACTION_POINTER_DOWN -> {
+                wasMultiTouch = true
+                skipNextDrag = true
+                val index = event.actionIndex
+                previousX = event.getX(index)
+                previousY = event.getY(index)
+            }
 
-                for (node in sceneGraph.getAllNodes()) {
-                    if (!node.visible) continue
-                    val (minB, maxB) = node.getWorldAABB()
-                    val t = ray.intersectAABB(minB, maxB)
-                    if (t != null && t < closestDist) {
-                        closestDist = t
-                        closestNodeId = node.id
+            MotionEvent.ACTION_POINTER_UP -> {
+                wasMultiTouch = true
+                val pointerIndex = event.actionIndex
+                val pointerId = event.getPointerId(pointerIndex)
+                if (pointerId == activePointerId) {
+                    val newPointerIndex = if (pointerIndex == 0) 1 else 0
+                    if (newPointerIndex < event.pointerCount) {
+                        activePointerId = event.getPointerId(newPointerIndex)
+                        previousX = event.getX(newPointerIndex)
+                        previousY = event.getY(newPointerIndex)
                     }
                 }
-
-                if (closestNodeId != null) {
-                    onSelectNode(closestNodeId)
-                }
+                skipNextDrag = true
             }
 
             MotionEvent.ACTION_MOVE -> {
-                val dx = x - previousX
-                val dy = y - previousY
+                val dxTotal = hypot(event.x - touchStartX, event.y - touchStartY)
+                if (dxTotal > 15f) {
+                    hasMoved = true
+                }
+
+                if (skipNextDrag) {
+                    skipNextDrag = false
+                    val pointerIndex = event.findPointerIndex(activePointerId)
+                    if (pointerIndex != -1) {
+                        previousX = event.getX(pointerIndex)
+                        previousY = event.getY(pointerIndex)
+                    } else {
+                        previousX = event.x
+                        previousY = event.y
+                    }
+                    return true
+                }
+
+                val pointerIndex = event.findPointerIndex(activePointerId)
+                val currentX = if (pointerIndex != -1) event.getX(pointerIndex) else event.x
+                val currentY = if (pointerIndex != -1) event.getY(pointerIndex) else event.y
+
+                val dx = currentX - previousX
+                val dy = currentY - previousY
+
+                previousX = currentX
+                previousY = currentY
 
                 if (isDraggingGizmo) {
                     val ray = Ray.fromScreen(
-                        screenX = x,
-                        screenY = y,
+                        screenX = currentX,
+                        screenY = currentY,
                         viewportWidth = renderer.viewportWidth.toFloat(),
                         viewportHeight = renderer.viewportHeight.toFloat(),
                         invViewProj = renderer.invViewProjMatrix
@@ -153,23 +215,27 @@ class EditorGLSurfaceView(
                         gizmoController.updateDrag(selectedNode, ray)
                         onGizmoTransformChanged()
                     }
-                } else if (event.pointerCount == 1) {
-                    // Orbit Editor Camera
-                    if (!camera.isUsingSceneCamera) {
-                        camera.orbit(dx * 0.35f, dy * 0.35f)
+                } else if (event.pointerCount == 1 && !wasMultiTouch) {
+                    // Orbit Editor Camera - suppressed after pinch release to prevent rotation shift
+                    if (abs(dx) < 100f && abs(dy) < 100f) {
+                        if (!camera.isUsingSceneCamera) {
+                            camera.orbit(dx * 0.35f, dy * 0.35f)
+                        }
                     }
                 } else if (event.pointerCount == 2) {
                     // Pan Editor Camera
-                    if (!camera.isUsingSceneCamera) {
-                        camera.pan(dx, dy)
+                    if (abs(dx) < 100f && abs(dy) < 100f) {
+                        if (!camera.isUsingSceneCamera) {
+                            camera.pan(dx, dy)
+                        }
                     }
                 }
-
-                previousX = x
-                previousY = y
             }
 
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                activePointerId = MotionEvent.INVALID_POINTER_ID
+                skipNextDrag = false
+
                 if (isDraggingGizmo) {
                     val selectedNode = renderer.selectedNodeId?.let { sceneGraph.getNode(it) }
                     if (selectedNode != null) {
@@ -177,7 +243,90 @@ class EditorGLSurfaceView(
                         onGizmoTransformChanged()
                     }
                     isDraggingGizmo = false
+                } else if (!hasMoved && !wasMultiTouch) {
+                    // User click/tap detected
+                    val ray = Ray.fromScreen(
+                        screenX = event.x,
+                        screenY = event.y,
+                        viewportWidth = renderer.viewportWidth.toFloat(),
+                        viewportHeight = renderer.viewportHeight.toFloat(),
+                        invViewProj = renderer.invViewProjMatrix
+                    )
+
+                    var closestNode: SceneNode? = null
+                    var closestDist = Float.POSITIVE_INFINITY
+
+                    for (node in sceneGraph.getAllNodes()) {
+                        if (!node.visible) continue
+                        val (minB, maxB) = node.getWorldAABB()
+                        val t = ray.intersectAABB(minB, maxB)
+                        if (t != null && t < closestDist) {
+                            closestDist = t
+                            closestNode = node
+                        }
+                    }
+
+                    val uiState = viewModel.uiState.value
+                    if (uiState.isWorldBuildingMode) {
+                        when (uiState.worldBuildingTool) {
+                            WorldBuildingTool.REMOVE -> {
+                                if (closestNode != null) {
+                                    viewModel.removeBlock(closestNode.id)
+                                }
+                            }
+                            WorldBuildingTool.SELECT -> {
+                                if (closestNode != null) {
+                                    viewModel.selectNode(closestNode.id)
+                                    viewModel.setWorldBuildingParent(closestNode.id)
+                                } else {
+                                    viewModel.setWorldBuildingParent(null)
+                                }
+                            }
+                            WorldBuildingTool.ADD -> {
+                                if (closestNode != null) {
+                                    // Place adjacent to clicked face
+                                    val hitPoint = ray.origin + ray.direction * closestDist
+                                    val center = closestNode.getWorldPosition()
+                                    val rel = hitPoint - center
+                                    val normal = when {
+                                        abs(rel.y) >= abs(rel.x) && abs(rel.y) >= abs(rel.z) ->
+                                            Vec3(0f, if (rel.y > 0) 1f else -1f, 0f)
+                                        abs(rel.x) >= abs(rel.z) ->
+                                            Vec3(if (rel.x > 0) 1f else -1f, 0f, 0f)
+                                        else ->
+                                            Vec3(0f, 0f, if (rel.z > 0) 1f else -1f)
+                                    }
+                                    val placePos = Vec3(
+                                        Math.round(center.x + normal.x).toFloat(),
+                                        Math.round(center.y + normal.y).toFloat().coerceAtLeast(0f),
+                                        Math.round(center.z + normal.z).toFloat()
+                                    )
+                                    viewModel.addBlockAt(placePos)
+                                } else {
+                                    // Place on ground plane at y = 0
+                                    if (abs(ray.direction.y) > 0.0001f) {
+                                        val t = -ray.origin.y / ray.direction.y
+                                        if (t > 0f) {
+                                            val hit = ray.origin + ray.direction * t
+                                            val placePos = Vec3(
+                                                Math.round(hit.x).toFloat(),
+                                                0f,
+                                                Math.round(hit.z).toFloat()
+                                            )
+                                            viewModel.addBlockAt(placePos)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        // Normal Editor mode: select tapped node or deselect
+                        onSelectNode(closestNode?.id)
+                    }
                 }
+
+                hasMoved = false
+                wasMultiTouch = false
             }
         }
         return true

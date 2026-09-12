@@ -179,40 +179,24 @@ class SideAiAssistant(private val context: Context) {
             }
         }
 
-        // 3. Animation Commands
-        if (timeline != null && (lower.contains("walk") || lower.contains("run") || lower.contains("jump") || lower.contains("wave") || lower.contains("slide") || lower.contains("move"))) {
-            val targetId = selectedNodeId ?: sceneGraph.nodes.values.firstOrNull { it.type == SceneNodeType.CHARACTER_ROOT }?.id
-            if (targetId == null) {
-                return AiExecutionResult(false, "No character or object found to animate. Select an object first.")
+        // 3. Delete / Remove
+        if (lower.startsWith("delete") || lower.startsWith("remove") || lower.contains("delete selected") || lower.contains("remove selected")) {
+            if (selectedNodeId != null) {
+                val node = sceneGraph.getNode(selectedNodeId)
+                val name = node?.name ?: "Selected"
+                sceneGraph.removeNode(selectedNodeId)
+                return AiExecutionResult(true, "Deleted '$name' from scene.")
+            } else if (lower.contains("all") || lower.contains("scene")) {
+                val toRemove = sceneGraph.nodes.values.filter { it.type != SceneNodeType.CAMERA }.map { it.id }
+                for (id in toRemove) {
+                    sceneGraph.removeNode(id)
+                }
+                return AiExecutionResult(true, "Cleared ${toRemove.size} objects from scene.")
             }
-            val targetNode = sceneGraph.getNode(targetId) ?: return null
-
-            val type = when {
-                lower.contains("run") -> ActionBlockType.RUN
-                lower.contains("jump") -> ActionBlockType.JUMP
-                lower.contains("wave") -> ActionBlockType.WAVE
-                lower.contains("slide") -> ActionBlockType.SLIDE_TO_POS
-                lower.contains("move") -> ActionBlockType.MOVE_TO_POS
-                else -> ActionBlockType.WALK
-            }
-
-            val nextStartTime = timeline.actionBlocks.maxOfOrNull { it.startTime + it.duration } ?: 0f
-            val block = ActionBlock(
-                name = "${targetNode.name} ${type.displayName}",
-                type = type,
-                targetNodeId = targetId,
-                startTime = nextStartTime,
-                duration = type.defaultDuration,
-                trackRow = timeline.actionBlocks.size % 4,
-                startPosition = targetNode.baseTransform.position,
-                targetPosition = targetNode.baseTransform.position + Vec3(0f, 0f, 3f)
-            )
-            timeline.addActionBlock(block)
-            return AiExecutionResult(true, "Added animation block '${type.displayName}' for '${targetNode.name}'.", emptyList(), listOf(block.id))
         }
 
-        // 4. Character Spawning (with multi-spawn support and non-overlapping positioning)
-        if (lower.contains("spawn") && (lower.contains("steve") || lower.contains("alex") || lower.contains("zombie") || lower.contains("character") || lower.contains("miner") || lower.contains("knight"))) {
+        // 4. Character Spawning (Handled BEFORE standalone animation so "Spawn Steve and make him walk" works!)
+        if (lower.contains("spawn") || lower.contains("create character") || lower.contains("add character") || lower.contains("add steve") || lower.contains("add alex") || lower.contains("add zombie")) {
             val isAlex = lower.contains("alex")
             val skinId = when {
                 lower.contains("alex") -> "alex"
@@ -229,6 +213,7 @@ class SideAiAssistant(private val context: Context) {
             } else 1
 
             val spawnedIds = mutableListOf<String>()
+            val createdBlockIds = mutableListOf<String>()
             val charName = skinId.replaceFirstChar { it.uppercase() }
 
             for (i in 1..spawnCount) {
@@ -245,14 +230,104 @@ class SideAiAssistant(private val context: Context) {
                     position = spawnPos
                 )
                 spawnedIds.add(rootId)
+
+                // If prompt ALSO requested animation (e.g. "spawn steve and make him walk")
+                if (timeline != null && (lower.contains("walk") || lower.contains("run") || lower.contains("jump") || lower.contains("wave") || lower.contains("slide"))) {
+                    val animType = when {
+                        lower.contains("run") -> ActionBlockType.RUN
+                        lower.contains("jump") -> ActionBlockType.JUMP
+                        lower.contains("wave") -> ActionBlockType.WAVE
+                        lower.contains("slide") -> ActionBlockType.SLIDE_TO_POS
+                        else -> ActionBlockType.WALK
+                    }
+                    val nextStartTime = timeline.actionBlocks.maxOfOrNull { it.startTime + it.duration } ?: 0f
+                    val block = ActionBlock(
+                        name = "$charName ${animType.displayName}",
+                        type = animType,
+                        targetNodeId = rootId,
+                        startTime = nextStartTime,
+                        duration = animType.defaultDuration,
+                        trackRow = timeline.actionBlocks.size % 4,
+                        startPosition = spawnPos,
+                        targetPosition = spawnPos + Vec3(0f, 0f, 3f),
+                        enablePositionMove = true
+                    )
+                    timeline.addActionBlock(block)
+                    createdBlockIds.add(block.id)
+                }
             }
 
+            val animMsg = if (createdBlockIds.isNotEmpty()) " with animation in timeline." else "."
             return AiExecutionResult(
                 true,
-                if (spawnCount == 1) "Spawned character '$charName' at distinct position."
-                else "Spawned $spawnCount characters at distinct positions.",
-                spawnedIds
+                if (spawnCount == 1) "Spawned character '$charName'$animMsg"
+                else "Spawned $spawnCount characters at non-overlapping positions$animMsg",
+                spawnedIds,
+                createdBlockIds
             )
+        }
+
+        // 5. Standalone Animation Commands
+        if (timeline != null && (lower.contains("walk") || lower.contains("run") || lower.contains("jump") || lower.contains("wave") || lower.contains("slide") || lower.contains("move") || lower.contains("scale"))) {
+            val targetId = selectedNodeId ?: sceneGraph.nodes.values.firstOrNull { it.type == SceneNodeType.CHARACTER_ROOT }?.id
+                ?: sceneGraph.nodes.values.firstOrNull { it.type != SceneNodeType.CAMERA }?.id
+
+            if (targetId == null) {
+                return AiExecutionResult(false, "No character or object found to animate. Please spawn or select an object first.")
+            }
+            val targetNode = sceneGraph.getNode(targetId) ?: return null
+
+            val type = when {
+                lower.contains("run") -> ActionBlockType.RUN
+                lower.contains("jump") -> ActionBlockType.JUMP
+                lower.contains("wave") -> ActionBlockType.WAVE
+                lower.contains("slide") -> ActionBlockType.SLIDE_TO_POS
+                lower.contains("scale") -> ActionBlockType.SCALE
+                lower.contains("move") -> ActionBlockType.MOVE_TO_POS
+                else -> ActionBlockType.WALK
+            }
+
+            val nextStartTime = timeline.actionBlocks.maxOfOrNull { it.startTime + it.duration } ?: 0f
+            val block = ActionBlock(
+                name = "${targetNode.name} ${type.displayName}",
+                type = type,
+                targetNodeId = targetId,
+                startTime = nextStartTime,
+                duration = type.defaultDuration,
+                trackRow = timeline.actionBlocks.size % 4,
+                startPosition = targetNode.baseTransform.position,
+                targetPosition = targetNode.baseTransform.position + Vec3(0f, 0f, 3f),
+                scaleVector = if (type == ActionBlockType.SCALE) Vec3(1.5f, 1.5f, 1.5f) else Vec3.ONE,
+                enablePositionMove = true
+            )
+            timeline.addActionBlock(block)
+            return AiExecutionResult(true, "Added animation block '${type.displayName}' for '${targetNode.name}'.", emptyList(), listOf(block.id))
+        }
+
+        // 6. Single Block Placement
+        if ((lower.startsWith("add block") || lower.startsWith("place block") || lower.startsWith("create block")) && !lower.contains("house") && !lower.contains("tower")) {
+            val tex = when {
+                lower.contains("stone") -> "stone"
+                lower.contains("cobble") -> "cobblestone"
+                lower.contains("brick") -> "bricks"
+                lower.contains("dirt") -> "dirt"
+                lower.contains("grass") -> "grass_top"
+                lower.contains("gold") -> "gold_block"
+                lower.contains("diamond") -> "diamond_block"
+                lower.contains("obsidian") -> "obsidian"
+                lower.contains("glass") -> "glass"
+                else -> "wood"
+            }
+            val blockNode = SceneNode(
+                id = UUID.randomUUID().toString(),
+                name = "${tex.replaceFirstChar { it.uppercase() }} Block",
+                type = SceneNodeType.BLOCK,
+                baseTransform = Transform(position = camera.target),
+                material = Material(textureAssetId = tex),
+                boxDimensions = Vec3.ONE
+            )
+            sceneGraph.addNode(blockNode, null)
+            return AiExecutionResult(true, "Placed ${blockNode.name} at camera center.", listOf(blockNode.id))
         }
 
         // 5. Structure Generation (House, Castle, Tower, Stairs, Wall, Platform)
@@ -472,13 +547,18 @@ Respond ONLY with valid JSON.
             }))
         }
 
-        val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=$apiKey"
+        val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$apiKey"
         val request = Request.Builder()
             .url(url)
             .post(requestJson.toString().toRequestBody("application/json".toMediaType()))
             .build()
 
-        val response = httpClient.newCall(request).execute()
+        val response = try {
+            httpClient.newCall(request).execute()
+        } catch (e: Exception) {
+            return executeFallback(prompt, sceneGraph, camera, timeline, selectedNodeId, createInNewGroup)
+        }
+
         val body = response.body?.string() ?: ""
         if (!response.isSuccessful) {
             return executeFallback(prompt, sceneGraph, camera, timeline, selectedNodeId, createInNewGroup)
@@ -522,6 +602,58 @@ Respond ONLY with valid JSON.
                 )
                 AiExecutionResult(true, "Spawned character '$skin'.", listOf(rootId))
             }
+            "ANIMATE" -> {
+                val targetId = selectedNodeId ?: sceneGraph.nodes.values.firstOrNull { it.type == SceneNodeType.CHARACTER_ROOT }?.id
+                if (targetId != null && timeline != null) {
+                    val anim = command.optString("type", command.optString("anim", "walk")).lowercase()
+                    val animType = when {
+                        anim.contains("run") -> ActionBlockType.RUN
+                        anim.contains("jump") -> ActionBlockType.JUMP
+                        anim.contains("wave") -> ActionBlockType.WAVE
+                        anim.contains("slide") -> ActionBlockType.SLIDE_TO_POS
+                        anim.contains("scale") -> ActionBlockType.SCALE
+                        else -> ActionBlockType.WALK
+                    }
+                    val targetNode = sceneGraph.getNode(targetId)
+                    val nextStart = timeline.actionBlocks.maxOfOrNull { it.startTime + it.duration } ?: 0f
+                    val block = ActionBlock(
+                        name = "${targetNode?.name ?: "Character"} ${animType.displayName}",
+                        type = animType,
+                        targetNodeId = targetId,
+                        startTime = nextStart,
+                        duration = animType.defaultDuration,
+                        trackRow = timeline.actionBlocks.size % 4,
+                        startPosition = targetNode?.baseTransform?.position ?: Vec3.ZERO,
+                        targetPosition = (targetNode?.baseTransform?.position ?: Vec3.ZERO) + Vec3(0f, 0f, 3f),
+                        enablePositionMove = true
+                    )
+                    timeline.addActionBlock(block)
+                    AiExecutionResult(true, "Added animation '${animType.displayName}' for '${targetNode?.name}'.", emptyList(), listOf(block.id))
+                } else {
+                    executeFallback(prompt, sceneGraph, camera, timeline, selectedNodeId, createInNewGroup)
+                }
+            }
+            "CAMERA" -> {
+                val preset = command.optString("preset", "front").lowercase()
+                when (preset) {
+                    "top" -> { camera.pitch = 85f; camera.distance = 12f }
+                    "side" -> { camera.yaw = 90f; camera.pitch = 15f; camera.distance = 6f }
+                    else -> { camera.target = Vec3(0f, 1f, 0f); camera.yaw = 0f; camera.pitch = 10f; camera.distance = 6f }
+                }
+                AiExecutionResult(true, "Switched camera to $preset view.")
+            }
+            "GROUP" -> {
+                val name = command.optString("name", "New Group")
+                val groupNode = SceneNode(
+                    id = UUID.randomUUID().toString(),
+                    name = name,
+                    type = SceneNodeType.GROUP,
+                    baseTransform = Transform(position = camera.target)
+                )
+                sceneGraph.addNode(groupNode, null)
+                if (selectedNodeId != null) sceneGraph.reparentNode(selectedNodeId, groupNode.id)
+                AiExecutionResult(true, "Grouped objects under '$name'.", listOf(groupNode.id))
+            }
             else -> executeFallback(prompt, sceneGraph, camera, timeline, selectedNodeId, createInNewGroup)
         }
     }
@@ -534,8 +666,20 @@ Respond ONLY with valid JSON.
         selectedNodeId: String?,
         createInNewGroup: Boolean
     ): AiExecutionResult {
-        val dims = parseDimensions(prompt)
-        return generateStructure(prompt, dims, sceneGraph, camera, createInNewGroup)
+        // Try procedural one more time
+        val procedural = tryProceduralExecution(prompt, sceneGraph, camera, timeline, selectedNodeId, createInNewGroup)
+        if (procedural != null) return procedural
+
+        val lower = prompt.lowercase()
+        if (lower.contains("house") || lower.contains("tower") || lower.contains("wall") || lower.contains("stairs") || lower.contains("castle") || lower.contains("cube")) {
+            val dims = parseDimensions(prompt)
+            return generateStructure(prompt, dims, sceneGraph, camera, createInNewGroup)
+        }
+
+        return AiExecutionResult(
+            false,
+            "Could not interpret '$prompt'. Try commands like:\n• 'Spawn Steve and make him walk'\n• 'Build a wooden house [dimension x:6 y:4 z:8]'\n• 'Build a stone tower 8 blocks high'\n• 'Make selected jump'\n• 'Set camera to top view'"
+        )
     }
 
     private fun extractGroupName(prompt: String): String? {

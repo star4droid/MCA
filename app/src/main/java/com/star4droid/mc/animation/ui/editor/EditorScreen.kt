@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -113,8 +114,12 @@ fun EditorScreen(
             WorldBuildingOverlay(
                 activeTool = uiState.worldBuildingTool,
                 selectedTextureId = uiState.selectedBlockTexture,
+                selectedParentId = uiState.worldBuildingParentId,
+                parentName = uiState.worldBuildingParentId?.let { viewModel.sceneGraph.getNode(it)?.name } ?: "Root",
+                candidateParents = viewModel.sceneGraph.getAllNodes().filter { it.type != com.star4droid.mc.animation.engine.scene.SceneNodeType.CAMERA },
                 onSelectTool = { viewModel.setWorldBuildingTool(it) },
                 onSelectTexture = { viewModel.setWorldBuildingTexture(it) },
+                onSelectParent = { viewModel.setWorldBuildingParent(it) },
                 onAddBlockAtCursor = { viewModel.addBlockAtCursor() },
                 onOpenImportBrowser = { viewModel.toggleFileBrowser() },
                 onExitMode = { viewModel.exitWorldBuildingMode() }
@@ -122,11 +127,12 @@ fun EditorScreen(
         } else {
             // Normal Editor UI
 
-            // 2A. Clean, Responsive, Scrollable Top Bar
+            // 2A. Clean, Responsive, Scrollable Top Bar with status bar / notch padding
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(Color(0xE60F172A))
+                    .statusBarsPadding()
                     .horizontalScroll(topBarScrollState)
                     .padding(horizontal = 8.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -166,10 +172,29 @@ fun EditorScreen(
 
                 Spacer(modifier = Modifier.width(8.dp))
 
-                // Orientation Toggle Button
-                IconButton(onClick = onToggleOrientation, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Default.ScreenRotation, contentDescription = "Toggle Orientation", tint = Color(0xFFE2E8F0), modifier = Modifier.size(18.dp))
+                // Screen Rotate Button
+                Surface(
+                    onClick = onToggleOrientation,
+                    shape = RoundedCornerShape(6.dp),
+                    color = Color(0xFF334155),
+                    modifier = Modifier.height(30.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 8.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.ScreenRotation,
+                            contentDescription = "Rotate Screen",
+                            tint = Color(0xFF38BDF8),
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Rotate", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.SemiBold)
+                    }
                 }
+
+                Spacer(modifier = Modifier.width(6.dp))
 
                 // Selection Lock Button
                 IconButton(
@@ -585,7 +610,12 @@ fun EditorScreen(
                     onAddActionBlock = { blockType -> viewModel.addActionBlock(blockType) },
                     onRemoveActionBlock = { blockId -> viewModel.removeActionBlock(blockId) },
                     onUpdateActionBlock = { block -> viewModel.updateActionBlock(block) },
-                    onClose = { viewModel.toggleTimeline() }
+                    onApplyBlockSettings = { block, applyToAll -> viewModel.applyActionBlockSettings(block, applyToAll) },
+                    onRemoveCustomBlockSettings = { blockId -> viewModel.removeCustomSettingsFromBlock(blockId) },
+                    onClose = { viewModel.toggleTimeline() },
+                    onExportAnimation = { animName -> viewModel.exportCurrentAnimation(animName) },
+                    onImportAnimation = { file -> viewModel.importAnimation(file) },
+                    getSavedAnimationFiles = { viewModel.getSavedAnimationFiles() }
                 )
             }
         }
