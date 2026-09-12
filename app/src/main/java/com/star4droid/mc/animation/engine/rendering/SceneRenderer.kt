@@ -13,6 +13,7 @@ import com.star4droid.mc.animation.engine.math.Vec3
 import com.star4droid.mc.animation.engine.scene.SceneGraph
 import com.star4droid.mc.animation.engine.scene.SceneNode
 import com.star4droid.mc.animation.engine.scene.SceneNodeType
+import com.star4droid.mc.animation.engine.scene.CharacterPartType
 import com.star4droid.mc.animation.engine.scene.TimeOfDay
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
@@ -29,6 +30,7 @@ class SceneRenderer(
 
     private var shader: Shader? = null
     private var cubeMesh: Mesh? = null
+    private var headMesh: Mesh? = null
     private var gridMesh: Mesh? = null
     private var wireframeMesh: Mesh? = null
     private val textureManager = TextureManager()
@@ -54,6 +56,7 @@ class SceneRenderer(
 
         shader = Shader(Shader.VERTEX_SHADER_SRC, Shader.FRAGMENT_SHADER_SRC)
         cubeMesh = Geometry.createCubeMesh(1f, 1f, 1f)
+        headMesh = Geometry.createHeadMesh(1f, 1f, 1f)
         gridMesh = Geometry.createGridMesh(30, 1.0f)
         wireframeMesh = Geometry.createBoundingWireframeMesh(1f, 1f, 1f)
     }
@@ -212,16 +215,29 @@ class SceneRenderer(
                     GLES20.glDisable(GLES20.GL_BLEND)
                 }
 
-                bindMesh(s, cube)
-                GLES20.glDrawElements(GLES20.GL_TRIANGLES, cube.indexCount, GLES20.GL_UNSIGNED_SHORT, cube.indexBuffer)
+                val meshToDraw = if (node.characterPartType == CharacterPartType.HEAD && headMesh != null) {
+                    headMesh!!
+                } else {
+                    cube
+                }
+
+                bindMesh(s, meshToDraw)
+                GLES20.glDrawElements(GLES20.GL_TRIANGLES, meshToDraw.indexCount, GLES20.GL_UNSIGNED_SHORT, meshToDraw.indexBuffer)
 
                 if (isTransparent) {
                     GLES20.glDisable(GLES20.GL_BLEND)
                 }
             }
             SceneNodeType.CAMERA -> {
-                // Draw Camera indicator box
-                renderMarker(s, cube, node.getWorldPosition(), viewProj, isSelected, 0.2f, 0.7f, 1.0f)
+                // Do NOT draw camera marker when looking through the scene camera or when in camera mode,
+                // because rendering a solid marker at the camera's eye position completely blocks the view.
+                if (!camera.isUsingSceneCamera) {
+                    val eyePos = camera.getEyePosition()
+                    val dist = node.getWorldPosition().distanceTo(eyePos)
+                    if (dist > 0.45f) {
+                        renderMarker(s, cube, node.getWorldPosition(), viewProj, isSelected, 0.2f, 0.7f, 1.0f)
+                    }
+                }
             }
             SceneNodeType.LIGHT -> {
                 // Draw Sun indicator box
@@ -239,7 +255,7 @@ class SceneRenderer(
         isSelected: Boolean,
         r: Float, g: Float, b: Float
     ) {
-        val m = Mat4.translation(pos) * Mat4.scaling(0.4f, 0.4f, 0.4f)
+        val m = Mat4.translation(pos) * Mat4.scaling(0.28f, 0.28f, 0.28f)
         System.arraycopy(m.values, 0, modelMatrix, 0, 16)
         Matrix.multiplyMM(mvpMatrix, 0, viewProj, 0, modelMatrix, 0)
 

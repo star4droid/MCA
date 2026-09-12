@@ -1,7 +1,32 @@
 package com.star4droid.mc.animation.animation
 
+import com.star4droid.mc.animation.engine.math.Vec3
 import java.util.UUID
 import kotlin.math.abs
+
+enum class ActionBlockType(val displayName: String, val defaultDuration: Float) {
+    WALK("Walk", 2.0f),
+    RUN("Run", 1.5f),
+    JUMP("Jump", 1.0f),
+    WAVE("Wave", 1.5f),
+    SLIDE_TO_POS("Slide to Pos", 2.0f),
+    MOVE_TO_POS("Move to Pos", 1.0f)
+}
+
+data class ActionBlock(
+    val id: String = UUID.randomUUID().toString(),
+    var name: String = "Action Block",
+    var type: ActionBlockType = ActionBlockType.WALK,
+    var targetNodeId: String = "",
+    var startTime: Float = 0f,
+    var duration: Float = 2.0f,
+    var trackRow: Int = 0,
+    var targetPosition: Vec3 = Vec3(0f, 0f, 0f),
+    var startPosition: Vec3? = null,
+    var speed: Float = 1.0f
+) {
+    fun copyBlock(): ActionBlock = copy(id = UUID.randomUUID().toString())
+}
 
 enum class Interpolation {
     STEP,
@@ -101,8 +126,25 @@ data class TimelineAsset(
     val id: String = UUID.randomUUID().toString(),
     var name: String = "Main Timeline",
     var duration: Float = 10.0f,
-    val tracks: MutableList<AnimationTrack> = mutableListOf()
+    val tracks: MutableList<AnimationTrack> = mutableListOf(),
+    val actionBlocks: MutableList<ActionBlock> = mutableListOf()
 ) {
+    fun addActionBlock(block: ActionBlock) {
+        actionBlocks.add(block)
+        val end = block.startTime + block.duration
+        if (end > duration) {
+            duration = end + 1.0f
+        }
+    }
+
+    fun removeActionBlock(blockId: String): Boolean {
+        return actionBlocks.removeAll { it.id == blockId }
+    }
+
+    fun getActionBlocksForObject(targetObjectId: String): List<ActionBlock> {
+        return actionBlocks.filter { it.targetNodeId == targetObjectId }
+    }
+
     fun getTrack(targetObjectId: String, propertyPath: String): AnimationTrack? {
         return tracks.firstOrNull { it.targetObjectId == targetObjectId && it.propertyPath == propertyPath }
     }

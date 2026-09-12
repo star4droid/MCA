@@ -162,4 +162,79 @@ object Geometry {
 
         return Mesh(vBuf, iBuf, indices.size)
     }
+
+    /**
+     * Creates a specialized cube mesh for Minecraft character heads.
+     * Mapped to a 32x16 texture atlas:
+     * - Front (face with eyes/mouth): (8..16, 8..16) -> (0.25..0.5, 0.5..1.0)
+     * - Back (hair only): (24..32, 8..16) -> (0.75..1.0, 0.5..1.0)
+     * - Top (hair): (8..16, 0..8) -> (0.25..0.5, 0.0..0.5)
+     * - Bottom (neck): (16..24, 0..8) -> (0.5..0.75, 0.0..0.5)
+     * - Right (right hair/ear): (0..8, 8..16) -> (0.0..0.25, 0.5..1.0)
+     * - Left (left hair/ear): (16..24, 8..16) -> (0.5..0.75, 0.5..1.0)
+     */
+    fun createHeadMesh(dx: Float = 1.0f, dy: Float = 1.0f, dz: Float = 1.0f): Mesh {
+        val hx = dx * 0.5f
+        val hy = dy * 0.5f
+        val hz = dz * 0.5f
+
+        val vertices = floatArrayOf(
+            // Front face (Z+) -> Face features (eyes, nose, mouth)
+            -hx, -hy,  hz,   0f, 0f, 1f,   0.25f, 1.0f,
+             hx, -hy,  hz,   0f, 0f, 1f,   0.50f, 1.0f,
+             hx,  hy,  hz,   0f, 0f, 1f,   0.50f, 0.5f,
+            -hx,  hy,  hz,   0f, 0f, 1f,   0.25f, 0.5f,
+
+            // Back face (Z-) -> Back of head hair
+             hx, -hy, -hz,   0f, 0f, -1f,  0.75f, 1.0f,
+            -hx, -hy, -hz,   0f, 0f, -1f,  1.00f, 1.0f,
+            -hx,  hy, -hz,   0f, 0f, -1f,  1.00f, 0.5f,
+             hx,  hy, -hz,   0f, 0f, -1f,  0.75f, 0.5f,
+
+            // Top face (Y+) -> Top of hair
+            -hx,  hy,  hz,   0f, 1f, 0f,   0.25f, 0.5f,
+             hx,  hy,  hz,   0f, 1f, 0f,   0.50f, 0.5f,
+             hx,  hy, -hz,   0f, 1f, 0f,   0.50f, 0.0f,
+            -hx,  hy, -hz,   0f, 1f, 0f,   0.25f, 0.0f,
+
+            // Bottom face (Y-) -> Neck / under chin
+            -hx, -hy, -hz,   0f, -1f, 0f,  0.50f, 0.5f,
+             hx, -hy, -hz,   0f, -1f, 0f,  0.75f, 0.5f,
+             hx, -hy,  hz,   0f, -1f, 0f,  0.75f, 0.0f,
+            -hx, -hy,  hz,   0f, -1f, 0f,  0.50f, 0.0f,
+
+            // Right face (X+) -> Right side of head hair
+             hx, -hy,  hz,   1f, 0f, 0f,   0.00f, 1.0f,
+             hx, -hy, -hz,   1f, 0f, 0f,   0.25f, 1.0f,
+             hx,  hy, -hz,   1f, 0f, 0f,   0.25f, 0.5f,
+             hx,  hy,  hz,   1f, 0f, 0f,   0.00f, 0.5f,
+
+            // Left face (X-) -> Left side of head hair
+            -hx, -hy, -hz,  -1f, 0f, 0f,   0.50f, 1.0f,
+            -hx, -hy,  hz,  -1f, 0f, 0f,   0.75f, 1.0f,
+            -hx,  hy,  hz,  -1f, 0f, 0f,   0.75f, 0.5f,
+            -hx,  hy, -hz,  -1f, 0f, 0f,   0.50f, 0.5f
+        )
+
+        val indices = shortArrayOf(
+            0, 1, 2,  0, 2, 3,       // Front
+            4, 5, 6,  4, 6, 7,       // Back
+            8, 9, 10, 8, 10, 11,     // Top
+            12, 13, 14, 12, 14, 15,  // Bottom
+            16, 17, 18, 16, 18, 19,  // Right
+            20, 21, 22, 20, 22, 23   // Left
+        )
+
+        val vBuf = ByteBuffer.allocateDirect(vertices.size * 4).run {
+            order(ByteOrder.nativeOrder())
+            asFloatBuffer().apply { put(vertices); position(0) }
+        }
+
+        val iBuf = ByteBuffer.allocateDirect(indices.size * 2).run {
+            order(ByteOrder.nativeOrder())
+            asShortBuffer().apply { put(indices); position(0) }
+        }
+
+        return Mesh(vBuf, iBuf, indices.size)
+    }
 }

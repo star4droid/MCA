@@ -1,6 +1,7 @@
 package com.star4droid.mc.animation.engine.scene
 
 import com.star4droid.mc.animation.engine.math.Mat4
+import com.star4droid.mc.animation.engine.math.Vec3
 import java.util.concurrent.ConcurrentHashMap
 
 class SceneGraph {
@@ -170,4 +171,67 @@ class SceneGraph {
     fun getAllNodes(): Collection<SceneNode> = nodes.values
 
     fun getRootNodes(): List<SceneNode> = rootNodeIds.mapNotNull { nodes[it] }
+
+    @Synchronized
+    fun findNonOverlappingPosition(
+        requiredSpan: Vec3 = Vec3(2f, 2f, 2f),
+        preferredOrigin: Vec3 = Vec3(0f, 0f, 0f)
+    ): Vec3 {
+        val occupiedBoxes = nodes.values
+            .filter { it.parentId == null || it.type == SceneNodeType.CHARACTER_ROOT || it.type == SceneNodeType.GROUP }
+            .map { node ->
+                val pos = node.baseTransform.position
+                val half = Vec3(
+                    (node.boxDimensions.x * node.baseTransform.scale.x).coerceAtLeast(1f) * 0.5f + 0.5f,
+                    (node.boxDimensions.y * node.baseTransform.scale.y).coerceAtLeast(1f) * 0.5f,
+                    (node.boxDimensions.z * node.baseTransform.scale.z).coerceAtLeast(1f) * 0.5f + 0.5f
+                )
+                Pair(pos - half, pos + half)
+            }
+
+        if (occupiedBoxes.isEmpty()) {
+            return preferredOrigin
+        }
+
+        val testHalf = Vec3(requiredSpan.x * 0.5f + 0.2f, requiredSpan.y * 0.5f, requiredSpan.z * 0.5f + 0.2f)
+        val pMin = preferredOrigin - testHalf
+        val pMax = preferredOrigin + testHalf
+        val originClear = !occupiedBoxes.any { (bMin, bMax) ->
+            pMin.x < bMax.x && pMax.x > bMin.x &&
+            pMin.z < bMax.z && pMax.z > bMin.z
+        }
+        if (originClear) {
+            return preferredOrigin
+        }
+
+        val stepSize = (requiredSpan.x.coerceAtLeast(requiredSpan.z) + 1.5f).coerceAtLeast(2.0f)
+        for (ring in 1..15) {
+            val dist = ring * stepSize
+            val numSteps = (ring * 6).coerceAtLeast(6)
+            for (step in 0 until numSteps) {
+                val angle = (step.toDouble() / numSteps) * 2.0 * Math.PI
+                val ox = (Math.cos(angle) * dist).toFloat()
+                val oz = (Math.sin(angle) * dist).toFloat()
+                val candidatePos = Vec3(
+                    Math.round(preferredOrigin.x + ox).toFloat(),
+                    preferredOrigin.y,
+                    Math.round(preferredOrigin.z + oz).toFloat()
+                )
+                val cMin = candidatePos - testHalf
+                val cMax = candidatePos + testHalf
+
+                val overlaps = occupiedBoxes.any { (bMin, bMax) ->
+                    cMin.x < bMax.x && cMax.x > bMin.x &&
+                    cMin.z < bMax.z && cMax.z > bMin.z
+                }
+
+                if (!overlaps) {
+                    return candidatePos
+                }
+            }
+        }
+
+        val maxX = occupiedBoxes.maxOfOrNull { it.second.x } ?: preferredOrigin.x
+        return Vec3(maxX + requiredSpan.x * 0.5f + 2f, preferredOrigin.y, preferredOrigin.z)
+    }
 }

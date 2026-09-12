@@ -16,6 +16,10 @@ class TextureManager {
     }
 
     private fun createTextureForId(textureId: String): Int {
+        val custom = BuiltInAssets.getCustomBitmap(textureId)
+        if (custom != null) {
+            return uploadBitmap(custom)
+        }
         val bitmap = if (textureId.startsWith("steve") || textureId.startsWith("alex") ||
             textureId.contains("_head") || textureId.contains("_body") ||
             textureId.contains("_arm") || textureId.contains("_leg")

@@ -5,12 +5,14 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -23,16 +25,31 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DirectionsRun
+import androidx.compose.material.icons.filled.DirectionsWalk
+import androidx.compose.material.icons.filled.FlightTakeoff
+import androidx.compose.material.icons.filled.GpsFixed
+import androidx.compose.material.icons.filled.NearMe
+import androidx.compose.material.icons.filled.PanTool
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.RepeatOne
+import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.TrendingFlat
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -42,17 +59,35 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.star4droid.mc.animation.animation.AnimationTrack
-import com.star4droid.mc.animation.animation.Interpolation
-import com.star4droid.mc.animation.animation.Keyframe
+import com.star4droid.mc.animation.animation.ActionBlock
+import com.star4droid.mc.animation.animation.ActionBlockType
 import com.star4droid.mc.animation.animation.TimelineAsset
+import com.star4droid.mc.animation.engine.math.Vec3
+
+fun getActionBlockColor(type: ActionBlockType): Color = when (type) {
+    ActionBlockType.WALK -> Color(0xFF10B981)
+    ActionBlockType.RUN -> Color(0xFFF59E0B)
+    ActionBlockType.JUMP -> Color(0xFF0EA5E9)
+    ActionBlockType.WAVE -> Color(0xFF8B5CF6)
+    ActionBlockType.SLIDE_TO_POS -> Color(0xFF6366F1)
+    ActionBlockType.MOVE_TO_POS -> Color(0xFF14B8A6)
+}
+
+fun getActionBlockIcon(type: ActionBlockType): ImageVector = when (type) {
+    ActionBlockType.WALK -> Icons.Default.DirectionsWalk
+    ActionBlockType.RUN -> Icons.Default.DirectionsRun
+    ActionBlockType.JUMP -> Icons.Default.FlightTakeoff
+    ActionBlockType.WAVE -> Icons.Default.PanTool
+    ActionBlockType.SLIDE_TO_POS -> Icons.Default.TrendingFlat
+    ActionBlockType.MOVE_TO_POS -> Icons.Default.NearMe
+}
 
 @Composable
 fun TimelinePanel(
@@ -62,33 +97,42 @@ fun TimelinePanel(
     isPlaying: Boolean,
     isLooping: Boolean,
     selectedNodeId: String?,
+    selectedNodePosition: Vec3?,
     onPlayPause: () -> Unit,
     onSeek: (Float) -> Unit,
     onReset: () -> Unit,
     onToggleLoop: () -> Unit,
     onSelectTimeline: (String) -> Unit,
     onCreateTimeline: (String) -> Unit,
-    onDeleteKeyframe: (trackId: String, keyframeId: String) -> Unit,
-    onUpdateKeyframeInterp: (trackId: String, keyframeId: String, interp: Interpolation) -> Unit,
+    onAddActionBlock: (ActionBlockType) -> Unit,
+    onRemoveActionBlock: (String) -> Unit,
+    onUpdateActionBlock: (ActionBlock) -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val duration = timeline?.duration ?: 10.0f
-    val relevantTracks = remember(timeline, selectedNodeId) {
-        if (selectedNodeId == null || timeline == null) emptyList()
-        else timeline.getTracksForObject(selectedNodeId)
-    }
-
-    var selectedKeyframeInfo by remember { mutableStateOf<Pair<AnimationTrack, Keyframe>?>(null) }
+    val duration = (timeline?.duration ?: 10.0f).coerceAtLeast(10f)
+    var addBlockMenuOpen by remember { mutableStateOf(false) }
     var timelineMenuOpen by remember { mutableStateOf(false) }
+    var selectedBlockId by remember { mutableStateOf<String?>(null) }
+
+    val horizontalScroll = rememberScrollState()
+    val verticalScroll = rememberScrollState()
+
+    // 80 dp per second scale for generous horizontal spacing
+    val dpPerSecond = 80.dp
+    val totalTimelineWidth = dpPerSecond * duration
+
+    val blocks = timeline?.actionBlocks ?: emptyList()
+    val maxRow = (blocks.maxOfOrNull { it.trackRow } ?: 2).coerceAtLeast(3)
 
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(Color(0xF0131B2E))
-            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .background(Color(0xF50F172A))
+            .border(1.dp, Color(0xFF334155))
+            .padding(horizontal = 8.dp, vertical = 6.dp)
     ) {
-        // Control Bar
+        // 1. Top Control Bar (Clean Material 3 Icons, NO emojis)
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -96,277 +140,356 @@ fun TimelinePanel(
         ) {
             // Playback controls
             Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onReset, modifier = Modifier.size(32.dp)) {
-                    Text("⏮️", fontSize = 14.sp)
+                IconButton(onClick = onReset, modifier = Modifier.size(34.dp)) {
+                    Icon(Icons.Default.SkipPrevious, contentDescription = "Reset", tint = Color(0xFFE2E8F0))
                 }
-                IconButton(onClick = { onSeek((currentTime - 0.1f).coerceAtLeast(0f)) }, modifier = Modifier.size(32.dp)) {
-                    Text("◀️", fontSize = 12.sp)
+
+                IconButton(
+                    onClick = onPlayPause,
+                    modifier = Modifier
+                        .size(34.dp)
+                        .clip(CircleShape)
+                        .background(if (isPlaying) Color(0xFFEF4444) else Color(0xFF22C55E))
+                ) {
+                    Icon(
+                        if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        contentDescription = if (isPlaying) "Pause" else "Play",
+                        tint = Color.White
+                    )
                 }
+
+                IconButton(onClick = onToggleLoop, modifier = Modifier.size(34.dp)) {
+                    Icon(
+                        if (isLooping) Icons.Default.Repeat else Icons.Default.RepeatOne,
+                        contentDescription = "Loop",
+                        tint = if (isLooping) Color(0xFF38BDF8) else Color(0xFF64748B)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(6.dp))
+
+                // Time display badge
                 Box(
                     modifier = Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFF22C55E))
-                        .clickable(onClick = onPlayPause),
-                    contentAlignment = Alignment.Center
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color(0xFF1E293B))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
-                    Text(if (isPlaying) "⏸" else "▶", color = Color.White, fontSize = 16.sp)
+                    Text(
+                        "${String.format("%.2f", currentTime)}s / ${String.format("%.1f", duration)}s",
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF38BDF8)
+                    )
                 }
-                IconButton(onClick = { onSeek((currentTime + 0.1f).coerceAtMost(duration)) }, modifier = Modifier.size(32.dp)) {
-                    Text("▶️", fontSize = 12.sp)
-                }
-                IconButton(onClick = onToggleLoop, modifier = Modifier.size(32.dp)) {
-                    Text(if (isLooping) "🔁" else "➡️", fontSize = 14.sp)
-                }
-
-                Spacer(modifier = Modifier.width(8.dp))
-
-                // Timecode
-                val curMin = (currentTime / 60).toInt()
-                val curSec = (currentTime % 60).toInt()
-                val curMs = ((currentTime % 1f) * 1000).toInt()
-                val totalMin = (duration / 60).toInt()
-                val totalSec = (duration % 60).toInt()
-                Text(
-                    text = String.format("%02d:%02d.%03d / %02d:%02d", curMin, curSec, curMs, totalMin, totalSec),
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 11.sp,
-                    color = Color(0xFF38BDF8),
-                    fontWeight = FontWeight.SemiBold
-                )
             }
 
-            // Timeline Switcher & Close
+            // Right side: Timeline dropdown, Add Block button, Close button
             Row(verticalAlignment = Alignment.CenterVertically) {
+                // Add Action Block Button
                 Box {
                     Button(
-                        onClick = { timelineMenuOpen = true },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E293B)),
-                        shape = RoundedCornerShape(6.dp),
-                        modifier = Modifier.height(28.dp)
+                        onClick = { addBlockMenuOpen = true },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+                        modifier = Modifier.height(32.dp)
                     ) {
-                        Text(timeline?.name ?: "Timelines", fontSize = 11.sp, color = Color(0xFFE2E8F0))
+                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Add Block", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
+
                     DropdownMenu(
-                        expanded = timelineMenuOpen,
-                        onDismissRequest = { timelineMenuOpen = false },
+                        expanded = addBlockMenuOpen,
+                        onDismissRequest = { addBlockMenuOpen = false },
                         modifier = Modifier.background(Color(0xFF1E293B))
                     ) {
-                        for (tl in allTimelines) {
+                        ActionBlockType.values().forEach { blockType ->
                             DropdownMenuItem(
-                                text = { Text(tl.name, color = Color(0xFFE2E8F0)) },
+                                leadingIcon = {
+                                    Icon(
+                                        getActionBlockIcon(blockType),
+                                        contentDescription = null,
+                                        tint = getActionBlockColor(blockType),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                },
+                                text = {
+                                    Column {
+                                        Text(blockType.displayName, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                                        Text("${blockType.defaultDuration}s duration", color = Color(0xFF94A3B8), fontSize = 10.sp)
+                                    }
+                                },
                                 onClick = {
-                                    timelineMenuOpen = false
-                                    onSelectTimeline(tl.id)
+                                    addBlockMenuOpen = false
+                                    onAddActionBlock(blockType)
                                 }
                             )
                         }
-                        DropdownMenuItem(
-                            text = { Text("+ New Timeline", color = Color(0xFF22C55E), fontWeight = FontWeight.Bold) },
-                            onClick = {
-                                timelineMenuOpen = false
-                                onCreateTimeline("Timeline ${allTimelines.size + 1}")
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(6.dp))
+
+                IconButton(onClick = onClose, modifier = Modifier.size(32.dp)) {
+                    Icon(Icons.Default.Close, contentDescription = "Close Timeline", tint = Color(0xFF94A3B8), modifier = Modifier.size(20.dp))
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        // 2. Scrollable Timeline Canvas (Both Horizontally and Vertically)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(130.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(Color(0xFF090D16))
+                .border(1.dp, Color(0xFF1E293B), RoundedCornerShape(8.dp))
+        ) {
+            // Horizontal scroll container
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .horizontalScroll(horizontalScroll)
+            ) {
+                // Main Timeline Tracks container with vertical scroll
+                Column(
+                    modifier = Modifier
+                        .width(totalTimelineWidth + 60.dp)
+                        .fillMaxHeight()
+                        .verticalScroll(verticalScroll)
+                ) {
+                    // Time Ruler Bar
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(24.dp)
+                            .background(Color(0xFF161F33))
+                            .pointerInput(duration) {
+                                detectTapGestures { offset ->
+                                    val time = (offset.x / (size.width - 60) * duration).coerceIn(0f, duration)
+                                    onSeek(time)
+                                }
                             }
+                    ) {
+                        // Ruler tick marks
+                        val totalSeconds = duration.toInt() + 1
+                        for (s in 0..totalSeconds) {
+                            val xPos = dpPerSecond * s
+                            Box(
+                                modifier = Modifier
+                                    .offset(x = xPos)
+                                    .width(1.dp)
+                                    .height(14.dp)
+                                    .background(Color(0xFF475569))
+                            )
+                            Text(
+                                "${s}s",
+                                fontSize = 9.sp,
+                                fontFamily = FontFamily.Monospace,
+                                color = Color(0xFF94A3B8),
+                                modifier = Modifier
+                                    .offset(x = xPos + 2.dp, y = 2.dp)
+                            )
+                        }
+                    }
+
+                    // Block Tracks Area
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(((maxRow + 1) * 36).dp)
+                            .pointerInput(duration) {
+                                detectTapGestures { offset ->
+                                    val time = (offset.x / (size.width - 60) * duration).coerceIn(0f, duration)
+                                    onSeek(time)
+                                }
+                            }
+                    ) {
+                        // Horizontal track row guidelines
+                        for (r in 0..maxRow) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .offset(y = (r * 36).dp)
+                                    .height(1.dp)
+                                    .background(Color(0xFF1E293B))
+                            )
+                        }
+
+                        // Render Action Blocks
+                        blocks.forEach { block ->
+                            val isBlockSelected = block.id == selectedBlockId
+                            val blockColor = getActionBlockColor(block.type)
+                            val startX = dpPerSecond * block.startTime
+                            val blockWidth = (dpPerSecond * block.duration).coerceAtLeast(36.dp)
+                            val rowY = (block.trackRow * 36 + 2).dp
+
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = if (isBlockSelected) blockColor else blockColor.copy(alpha = 0.85f),
+                                shadowElevation = if (isBlockSelected) 4.dp else 1.dp,
+                                modifier = Modifier
+                                    .offset(x = startX, y = rowY)
+                                    .width(blockWidth)
+                                    .height(32.dp)
+                                    .border(
+                                        width = if (isBlockSelected) 2.dp else 1.dp,
+                                        color = if (isBlockSelected) Color.White else Color(0x66FFFFFF),
+                                        shape = RoundedCornerShape(6.dp)
+                                    )
+                                    .clickable {
+                                        selectedBlockId = if (selectedBlockId == block.id) null else block.id
+                                        onSeek(block.startTime)
+                                    }
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(horizontal = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            getActionBlockIcon(block.type),
+                                            contentDescription = null,
+                                            tint = Color.White,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            block.type.displayName,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White,
+                                            maxLines = 1
+                                        )
+                                    }
+                                    Text(
+                                        "${String.format("%.1f", block.duration)}s",
+                                        fontSize = 9.sp,
+                                        fontFamily = FontFamily.Monospace,
+                                        color = Color(0xDDFFFFFF)
+                                    )
+                                }
+                            }
+                        }
+
+                        // Playhead Indicator Line
+                        val playheadX = dpPerSecond * currentTime
+                        Box(
+                            modifier = Modifier
+                                .offset(x = playheadX)
+                                .width(2.dp)
+                                .fillMaxHeight()
+                                .background(Color(0xFFEF4444))
                         )
                     }
                 }
-                Spacer(modifier = Modifier.width(6.dp))
-                IconButton(onClick = onClose, modifier = Modifier.size(28.dp)) {
-                    Icon(Icons.Filled.Close, contentDescription = "Close", tint = Color(0xFF94A3B8), modifier = Modifier.size(16.dp))
-                }
             }
         }
 
-        Spacer(modifier = Modifier.height(6.dp))
-
-        // Time Ruler & Scrubber Bar
-        BoxWithConstraints(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(24.dp)
-                .clip(RoundedCornerShape(4.dp))
-                .background(Color(0xFF0F172A))
-                .pointerInput(duration) {
-                    detectTapGestures { offset ->
-                        val targetTime = (offset.x / size.width) * duration
-                        onSeek(targetTime.coerceIn(0f, duration))
-                    }
-                }
-                .pointerInput(duration) {
-                    detectDragGestures { change, _ ->
-                        val targetTime = (change.position.x / size.width) * duration
-                        onSeek(targetTime.coerceIn(0f, duration))
-                    }
-                }
-        ) {
-            val totalWidthPx = constraints.maxWidth.toFloat()
-            val scrubberX = (currentTime / duration) * totalWidthPx
-
-            // Time ruler tick marks
-            Row(modifier = Modifier.fillMaxWidth()) {
-                val ticks = 10
-                for (i in 0..ticks) {
-                    val sec = (duration / ticks) * i
-                    Text(
-                        "${sec.toInt()}s",
-                        fontSize = 8.sp,
-                        color = Color(0xFF475569),
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
-
-            // Red Scrubber Line & Head
-            Box(
-                modifier = Modifier
-                    .offset(x = (scrubberX - 6).dp.coerceAtLeast(0.dp))
-                    .size(12.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xFFEF4444))
-                    .align(Alignment.CenterStart)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(6.dp))
-
-        // Keyframe Tracks
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(110.dp)
-                .verticalScroll(rememberScrollState())
-        ) {
-            if (relevantTracks.isEmpty()) {
-                Box(
+        // 3. Selected Action Block Inspector & Quick Settings
+        val activeBlock = blocks.firstOrNull { it.id == selectedBlockId }
+        if (activeBlock != null) {
+            Spacer(modifier = Modifier.height(6.dp))
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = Color(0xFF1E293B),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(12.dp),
-                    contentAlignment = Alignment.Center
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(
-                        if (selectedNodeId == null) "Select an object to inspect animation tracks"
-                        else "No animated keyframes yet. Use 🔑 icons in Inspector to keyframe channels.",
-                        fontSize = 11.sp,
-                        color = Color(0xFF64748B)
-                    )
-                }
-            } else {
-                for (track in relevantTracks) {
-                    TrackRow(
-                        track = track,
-                        duration = duration,
-                        currentTime = currentTime,
-                        selectedKeyframe = selectedKeyframeInfo?.second,
-                        onSelectKeyframe = { kf -> selectedKeyframeInfo = Pair(track, kf) },
-                        onSeek = onSeek
-                    )
-                    Spacer(modifier = Modifier.height(3.dp))
-                }
-            }
-        }
+                    // Block name and icon
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            getActionBlockIcon(activeBlock.type),
+                            contentDescription = null,
+                            tint = getActionBlockColor(activeBlock.type),
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Column {
+                            Text(
+                                "${activeBlock.type.displayName} Block",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp,
+                                color = Color(0xFFF1F5F9)
+                            )
+                            Text(
+                                "Start: ${String.format("%.1f", activeBlock.startTime)}s | Dur: ${String.format("%.1f", activeBlock.duration)}s | Row: ${activeBlock.trackRow}",
+                                fontSize = 10.sp,
+                                color = Color(0xFF94A3B8)
+                            )
+                        }
+                    }
 
-        // Selected Keyframe Editor Sheet Bar
-        selectedKeyframeInfo?.let { (track, kf) ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(Color(0xFF1E293B))
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    "Keyframe @ ${String.format("%.2fs", kf.time)} = ${String.format("%.2f", kf.value)}",
-                    fontSize = 11.sp,
-                    color = Color(0xFFE2E8F0)
-                )
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Curve:", fontSize = 10.sp, color = Color(0xFF94A3B8))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Interpolation.values().forEach { interp ->
-                        val isSelected = kf.interpolation == interp
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(if (isSelected) Color(0xFF2563EB) else Color(0xFF334155))
-                                .clickable { onUpdateKeyframeInterp(track.id, kf.id, interp) }
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                    // Controls: Row Up/Down, Time Adjust, Set Target to Current Position, Delete
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        // Move row up/down
+                        IconButton(
+                            onClick = {
+                                if (activeBlock.trackRow > 0) {
+                                    activeBlock.trackRow -= 1
+                                    onUpdateActionBlock(activeBlock)
+                                }
+                            },
+                            modifier = Modifier.size(28.dp)
                         ) {
-                            Text(interp.name, fontSize = 9.sp, color = Color.White)
+                            Icon(Icons.Default.ArrowUpward, contentDescription = "Move Row Up", tint = Color(0xFF94A3B8), modifier = Modifier.size(16.dp))
                         }
-                        Spacer(modifier = Modifier.width(4.dp))
-                    }
 
-                    IconButton(
-                        onClick = {
-                            onDeleteKeyframe(track.id, kf.id)
-                            selectedKeyframeInfo = null
-                        },
-                        modifier = Modifier.size(24.dp)
-                    ) {
-                        Icon(Icons.Filled.Delete, contentDescription = "Delete", tint = Color(0xFFEF4444), modifier = Modifier.size(14.dp))
+                        IconButton(
+                            onClick = {
+                                activeBlock.trackRow += 1
+                                onUpdateActionBlock(activeBlock)
+                            },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(Icons.Default.ArrowDownward, contentDescription = "Move Row Down", tint = Color(0xFF94A3B8), modifier = Modifier.size(16.dp))
+                        }
+
+                        // If Slide or Move block: button to select current object position!
+                        if (activeBlock.type == ActionBlockType.SLIDE_TO_POS || activeBlock.type == ActionBlockType.MOVE_TO_POS) {
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Button(
+                                onClick = {
+                                    if (selectedNodePosition != null) {
+                                        activeBlock.targetPosition = selectedNodePosition.copy()
+                                        onUpdateActionBlock(activeBlock)
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                                modifier = Modifier.height(28.dp)
+                            ) {
+                                Icon(Icons.Default.GpsFixed, contentDescription = null, modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Target: Current Pos", fontSize = 10.sp)
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.width(6.dp))
+
+                        // Delete Block
+                        IconButton(
+                            onClick = {
+                                onRemoveActionBlock(activeBlock.id)
+                                selectedBlockId = null
+                            },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(Icons.Default.Delete, contentDescription = "Delete Block", tint = Color(0xFFEF4444), modifier = Modifier.size(18.dp))
+                        }
                     }
                 }
-            }
-        }
-    }
-}
-
-@Composable
-fun TrackRow(
-    track: AnimationTrack,
-    duration: Float,
-    currentTime: Float,
-    selectedKeyframe: Keyframe?,
-    onSelectKeyframe: (Keyframe) -> Unit,
-    onSeek: (Float) -> Unit
-) {
-    val cleanProp = track.propertyPath.replace("transform.", "")
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(22.dp)
-            .clip(RoundedCornerShape(4.dp))
-            .background(Color(0xFF1E293B)),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = cleanProp,
-            fontSize = 10.sp,
-            color = Color(0xFF94A3B8),
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier
-                .width(100.dp)
-                .padding(start = 6.dp)
-        )
-
-        // Track timeline channel
-        BoxWithConstraints(
-            modifier = Modifier
-                .weight(1f)
-                .height(20.dp)
-                .background(Color(0xFF0F172A))
-        ) {
-            val totalWidthPx = constraints.maxWidth.toFloat()
-
-            // Keyframe diamonds
-            for (kf in track.keyframes) {
-                val kfX = (kf.time / duration).coerceIn(0f, 1f) * totalWidthPx
-                val isSelected = (kf.id == selectedKeyframe?.id)
-
-                Box(
-                    modifier = Modifier
-                        .offset(x = (kfX - 6).dp.coerceAtLeast(0.dp), y = 4.dp)
-                        .size(10.dp)
-                        .rotate(45f)
-                        .background(if (isSelected) Color(0xFF38BDF8) else Color(0xFFF59E0B))
-                        .clickable {
-                            onSeek(kf.time)
-                            onSelectKeyframe(kf)
-                        }
-                )
             }
         }
     }

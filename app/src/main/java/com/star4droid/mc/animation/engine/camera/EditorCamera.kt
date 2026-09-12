@@ -67,4 +67,13 @@ class EditorCamera {
         val move = (forward * forwardBack + right * leftRight + Vec3.UP * upDown) * speed
         target = target + move
     }
+
+    fun resetToStartAndCenter() {
+        isUsingSceneCamera = false
+        target = Vec3(0f, 1f, 0f)
+        distance = 6.0f
+        yaw = 45.0f
+        pitch = 25.0f
+        fov = 60.0f
+    }
 }

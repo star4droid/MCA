@@ -1,5 +1,6 @@
 package com.star4droid.mc.animation.ui.project
 
+import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -22,8 +23,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.ScreenRotation
+import androidx.compose.material.icons.filled.ViewInAr
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -36,7 +40,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -58,11 +61,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.star4droid.mc.animation.project.ProjectMetadata
 import com.star4droid.mc.animation.project.ProjectRepository
+import com.star4droid.mc.animation.ui.files.FileBrowserDialog
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -70,20 +75,24 @@ import java.util.Locale
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProjectListScreen(
-    onOpenProject: (String) -> Unit
+    onOpenProject: (String) -> Unit,
+    onToggleOrientation: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val repository = remember { ProjectRepository(context) }
+    val prefs = remember { context.getSharedPreferences("mc_animator_prefs", Context.MODE_PRIVATE) }
     var projects by remember { mutableStateOf<List<ProjectMetadata>>(emptyList()) }
 
     var showCreateDialog by remember { mutableStateOf(false) }
+    var showFileBrowser by remember { mutableStateOf(false) }
     var projectToRename by remember { mutableStateOf<ProjectMetadata?>(null) }
     var projectToDelete by remember { mutableStateOf<ProjectMetadata?>(null) }
 
-    fun refreshProjects() {
+    fun refreshProjects(initial: Boolean = false) {
         var list = repository.listProjects()
-        if (list.isEmpty()) {
-            // First time launch: auto-create initial sample project!
+        val isFirst = prefs.getBoolean("is_first_launch", true)
+        if (list.isEmpty() && isFirst && initial) {
+            prefs.edit().putBoolean("is_first_launch", false).apply()
             repository.createProject("Steve's Adventure", "steve")
             list = repository.listProjects()
         }
@@ -91,7 +100,7 @@ fun ProjectListScreen(
     }
 
     LaunchedEffect(Unit) {
-        refreshProjects()
+        refreshProjects(initial = true)
     }
 
     Scaffold(
@@ -110,27 +119,33 @@ fun ProjectListScreen(
                                 ),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(
-                                "MC",
-                                color = Color.White,
-                                fontWeight = FontWeight.Black,
-                                fontSize = 16.sp
-                            )
+                            Icon(Icons.Default.ViewInAr, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
                         }
                         Spacer(modifier = Modifier.width(12.dp))
                         Column {
                             Text(
-                                "Minecraft Animator",
+                                "Minecraft Studio",
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 18.sp,
+                                fontSize = 17.sp,
                                 color = Color(0xFFE2E8F0)
                             )
                             Text(
-                                "3D Keyframe & Rigging Studio",
-                                fontSize = 12.sp,
+                                "3D Animation & Rigging",
+                                fontSize = 11.sp,
                                 color = Color(0xFF94A3B8)
                             )
                         }
+                    }
+                },
+                actions = {
+                    // Import / File Browser button
+                    IconButton(onClick = { showFileBrowser = true }) {
+                        Icon(Icons.Default.FolderOpen, contentDescription = "Import Files", tint = Color(0xFF38BDF8))
+                    }
+
+                    // Orientation Toggle button
+                    IconButton(onClick = onToggleOrientation) {
+                        Icon(Icons.Default.ScreenRotation, contentDescription = "Toggle Orientation", tint = Color(0xFFE2E8F0))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -158,31 +173,66 @@ fun ProjectListScreen(
                 .padding(horizontal = 16.dp)
         ) {
             Text(
-                "My Projects (${projects.size})",
+                "Projects (${projects.size})",
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 15.sp,
                 color = Color(0xFFCBD5E1),
                 modifier = Modifier.padding(vertical = 12.dp)
             )
 
-            LazyVerticalGrid(
-                columns = GridCells.Adaptive(minSize = 160.dp),
-                contentPadding = PaddingValues(bottom = 80.dp),
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-                modifier = Modifier.fillMaxSize()
-            ) {
-                items(projects, key = { it.id }) { project ->
-                    ProjectCard(
-                        project = project,
-                        onClick = { onOpenProject(project.id) },
-                        onRename = { projectToRename = project },
-                        onDuplicate = {
-                            repository.duplicateProject(project.id)
-                            refreshProjects()
-                        },
-                        onDelete = { projectToDelete = project }
-                    )
+            if (projects.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(bottom = 60.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(24.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.ViewInAr,
+                            contentDescription = null,
+                            tint = Color(0xFF334155),
+                            modifier = Modifier.size(64.dp)
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            "No projects found",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp,
+                            color = Color(0xFF94A3B8)
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            "Tap '+' below to create your first Minecraft 3D scene!",
+                            fontSize = 12.sp,
+                            color = Color(0xFF64748B),
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            } else {
+                LazyVerticalGrid(
+                    columns = GridCells.Adaptive(minSize = 160.dp),
+                    contentPadding = PaddingValues(bottom = 80.dp),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    items(projects, key = { it.id }) { project ->
+                        ProjectCard(
+                            project = project,
+                            onClick = { onOpenProject(project.id) },
+                            onRename = { projectToRename = project },
+                            onDuplicate = {
+                                repository.duplicateProject(project.id)
+                                refreshProjects()
+                            },
+                            onDelete = { projectToDelete = project }
+                        )
+                    }
                 }
             }
         }
@@ -202,7 +252,7 @@ fun ProjectListScreen(
                         value = newName,
                         onValueChange = { newName = it },
                         label = { Text("Project Name") },
-                        placeholder = { Text("e.g. Sword Fight Animation") },
+                        placeholder = { Text("e.g. Minecraft Walk Cycle") },
                         singleLine = true,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -222,7 +272,7 @@ fun ProjectListScreen(
                             shape = RoundedCornerShape(8.dp),
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text("Steve Scene", fontSize = 12.sp)
+                            Text("Steve Rig", fontSize = 12.sp)
                         }
                         Spacer(modifier = Modifier.width(8.dp))
                         Button(
@@ -233,7 +283,7 @@ fun ProjectListScreen(
                             shape = RoundedCornerShape(8.dp),
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text("Blank Scene", fontSize = 12.sp)
+                            Text("Empty Scene", fontSize = 12.sp)
                         }
                     }
                 }
@@ -311,9 +361,10 @@ fun ProjectListScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        repository.deleteProject(proj.id)
+                        val deletedId = proj.id
+                        repository.deleteProject(deletedId)
                         projectToDelete = null
-                        refreshProjects()
+                        refreshProjects(initial = false)
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444))
                 ) {
@@ -326,6 +377,14 @@ fun ProjectListScreen(
                 }
             },
             containerColor = Color(0xFF1E293B)
+        )
+    }
+
+    // File Browser Dialog
+    if (showFileBrowser) {
+        FileBrowserDialog(
+            onDismiss = { showFileBrowser = false },
+            onTextureImported = { _ -> }
         )
     }
 }
@@ -376,7 +435,12 @@ fun ProjectCard(
                             .background(Color(0xFF22C55E)),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text("⛏️", fontSize = 20.sp)
+                        Icon(
+                            Icons.Default.ViewInAr,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(22.dp)
+                        )
                     }
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(

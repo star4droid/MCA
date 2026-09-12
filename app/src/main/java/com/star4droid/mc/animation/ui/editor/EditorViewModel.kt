@@ -3,6 +3,8 @@ package com.star4droid.mc.animation.ui.editor
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.star4droid.mc.animation.animation.ActionBlock
+import com.star4droid.mc.animation.animation.ActionBlockType
 import com.star4droid.mc.animation.animation.AnimationEvaluator
 import com.star4droid.mc.animation.animation.AnimationTrack
 import com.star4droid.mc.animation.animation.Interpolation
@@ -33,6 +35,7 @@ import com.star4droid.mc.animation.engine.scene.TimeOfDay
 import com.star4droid.mc.animation.engine.scene.Transform
 import com.star4droid.mc.animation.project.ProjectMetadata
 import com.star4droid.mc.animation.project.ProjectRepository
+import com.star4droid.mc.animation.ui.world.WorldBuildingTool
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -42,10 +45,18 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.util.UUID
 
+data class SceneItem(
+    val id: String = UUID.randomUUID().toString(),
+    var name: String = "Scene 1",
+    val nodes: MutableMap<String, SceneNode> = mutableMapOf(),
+    val rootIds: MutableList<String> = mutableListOf()
+)
+
 data class EditorUiState(
     val projectId: String = "",
     val projectName: String = "Untitled",
     val selectedNodeId: String? = null,
+    val isSelectionLocked: Boolean = false,
     val editorMode: EditorMode = EditorMode.MOVE,
     val currentTime: Float = 0f,
     val isPlaying: Boolean = false,
@@ -58,6 +69,14 @@ data class EditorUiState(
     val isTimelineOpen: Boolean = true,
     val isAssetBrowserOpen: Boolean = false,
     val isSceneCameraActive: Boolean = false,
+    val isWorldBuildingMode: Boolean = false,
+    val worldBuildingTool: WorldBuildingTool = WorldBuildingTool.ADD,
+    val selectedBlockTexture: String = "grass",
+    val isFileBrowserOpen: Boolean = false,
+    val isSideAiOpen: Boolean = false,
+    val isSceneManagerOpen: Boolean = false,
+    val scenes: List<SceneItem> = listOf(SceneItem(name = "Main Scene")),
+    val activeSceneId: String = "",
     val timeOfDay: TimeOfDay = TimeOfDay.NOON,
     val saveMessage: String? = null,
     val version: Long = 0L // Incremented to trigger Compose recomposition
@@ -76,12 +95,23 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
     val timelines = mutableListOf<TimelineAsset>()
     val timelineInstances = mutableListOf<TimelineInstance>()
 
+    private val scenesList = mutableListOf<SceneItem>()
+
     private var projectMetadata: ProjectMetadata? = null
 
     private val _uiState = MutableStateFlow(EditorUiState())
     val uiState: StateFlow<EditorUiState> = _uiState.asStateFlow()
 
     private var playbackJob: Job? = null
+
+    init {
+        val initialScene = SceneItem(name = "Main Scene")
+        scenesList.add(initialScene)
+        _uiState.value = _uiState.value.copy(
+            scenes = scenesList.toList(),
+            activeSceneId = initialScene.id
+        )
+    }
 
     fun loadProject(projectId: String) {
         val loaded = projectRepository.loadProject(projectId)
@@ -101,11 +131,19 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
 
             val activeTlId = timelines.firstOrNull()?.id ?: ""
 
+            // Sync initial scene
+            if (scenesList.isEmpty()) {
+                scenesList.add(SceneItem(name = "Main Scene"))
+            }
+            saveCurrentNodesToScene(scenesList[0])
+
             _uiState.value = _uiState.value.copy(
                 projectId = projectId,
                 projectName = loaded.metadata.name,
                 activeTimelineId = activeTlId,
                 selectedNodeId = sceneGraph.rootNodeIds.firstOrNull(),
+                scenes = scenesList.toList(),
+                activeSceneId = scenesList[0].id,
                 version = System.currentTimeMillis()
             )
             updateRendererSelectedNode()
@@ -113,11 +151,31 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun selectNode(nodeId: String?) {
+        // Selection lock enforcement
+        if (_uiState.value.isSelectionLocked && _uiState.value.selectedNodeId != null && nodeId != null && nodeId != _uiState.value.selectedNodeId) {
+            return
+        }
         _uiState.value = _uiState.value.copy(
             selectedNodeId = nodeId,
             version = System.currentTimeMillis()
         )
         updateRendererSelectedNode()
+    }
+
+    fun toggleSelectionLock() {
+        val locked = !_uiState.value.isSelectionLocked
+        _uiState.value = _uiState.value.copy(isSelectionLocked = locked)
+    }
+
+    fun renameNode(nodeId: String, newName: String) {
+        val node = sceneGraph.getNode(nodeId) ?: return
+        node.name = newName
+        triggerRecomposition()
+    }
+
+    fun reparentNode(childId: String, newParentId: String?) {
+        sceneGraph.reparentNode(childId, newParentId)
+        triggerRecomposition()
     }
 
     private fun updateRendererSelectedNode() {
@@ -128,117 +186,189 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         gizmoController.currentMode = mode
         if (mode == EditorMode.CAMERA) {
             camera.isUsingSceneCamera = true
-            _uiState.value = _uiState.value.copy(
-                editorMode = mode,
-                isSceneCameraActive = true,
-                version = System.currentTimeMillis()
-            )
+            _uiState.value = _uiState.value.copy(editorMode = mode, isSceneCameraActive = true)
         } else {
             camera.isUsingSceneCamera = false
-            _uiState.value = _uiState.value.copy(
-                editorMode = mode,
-                isSceneCameraActive = false,
-                version = System.currentTimeMillis()
-            )
+            _uiState.value = _uiState.value.copy(editorMode = mode, isSceneCameraActive = false)
         }
+        triggerRecomposition()
     }
 
-    fun toggleCameraMode() {
-        val next = !camera.isUsingSceneCamera
+    fun resetCameraToCenter() {
+        camera.resetToStartAndCenter()
+        _uiState.value = _uiState.value.copy(
+            isSceneCameraActive = false,
+            editorMode = if (_uiState.value.editorMode == EditorMode.CAMERA) EditorMode.SELECT else _uiState.value.editorMode,
+            version = System.currentTimeMillis()
+        )
+        gizmoController.currentMode = _uiState.value.editorMode
+        triggerRecomposition()
+    }
+
+    fun setTimeOfDay(timeOfDay: TimeOfDay) {
+        _uiState.value = _uiState.value.copy(timeOfDay = timeOfDay)
+        renderer?.currentTimeOfDay = timeOfDay
+    }
+
+    fun toggleSceneCamera() {
+        val next = !_uiState.value.isSceneCameraActive
+        _uiState.value = _uiState.value.copy(isSceneCameraActive = next)
         camera.isUsingSceneCamera = next
-        _uiState.value = _uiState.value.copy(
-            isSceneCameraActive = next,
-            editorMode = if (next) EditorMode.CAMERA else EditorMode.MOVE,
-            version = System.currentTimeMillis()
-        )
     }
 
-    fun setTimeOfDay(tod: TimeOfDay) {
-        renderer?.currentTimeOfDay = tod
-        _uiState.value = _uiState.value.copy(
-            timeOfDay = tod,
-            version = System.currentTimeMillis()
-        )
-    }
-
-    // --- Playback Engine ---
+    // --- Animation Playback ---
     fun togglePlayPause() {
         if (_uiState.value.isPlaying) {
-            pause()
+            pausePlayback()
         } else {
-            play()
+            startPlayback()
         }
     }
 
-    fun play() {
-        _uiState.value = _uiState.value.copy(isPlaying = true)
+    fun startPlayback() {
         playbackJob?.cancel()
-        playbackJob = viewModelScope.launch {
-            val activeTimeline = getActiveTimeline()
-            val maxDuration = activeTimeline?.duration ?: 10.0f
-            var lastTime = System.nanoTime()
+        _uiState.value = _uiState.value.copy(isPlaying = true)
 
+        val activeTl = getActiveTimeline() ?: return
+        val dur = activeTl.duration.coerceAtLeast(1.0f)
+
+        playbackJob = viewModelScope.launch {
+            var lastTime = System.nanoTime()
             while (isActive && _uiState.value.isPlaying) {
                 delay(16) // ~60fps
                 val now = System.nanoTime()
-                val dt = (now - lastTime) / 1_000_000_000f
+                val dt = (now - lastTime) / 1_000_000_000.0f
                 lastTime = now
 
-                var newTime = _uiState.value.currentTime + dt
-                if (newTime > maxDuration) {
+                var t = _uiState.value.currentTime + dt
+                if (t >= dur) {
                     if (_uiState.value.isLooping) {
-                        newTime = 0f
+                        t %= dur
                     } else {
-                        newTime = maxDuration
-                        _uiState.value = _uiState.value.copy(isPlaying = false, currentTime = newTime)
-                        evaluateAnimation(newTime)
-                        break
+                        t = dur
+                        pausePlayback()
                     }
                 }
-                _uiState.value = _uiState.value.copy(currentTime = newTime)
-                evaluateAnimation(newTime)
+                seekTo(t)
             }
         }
     }
 
-    fun pause() {
+    fun pausePlayback() {
         playbackJob?.cancel()
+        playbackJob = null
         _uiState.value = _uiState.value.copy(isPlaying = false)
     }
 
     fun seekTo(time: Float) {
-        val activeTl = getActiveTimeline()
-        val duration = activeTl?.duration ?: 10f
-        val clamped = time.coerceIn(0f, duration)
-        _uiState.value = _uiState.value.copy(currentTime = clamped, version = System.currentTimeMillis())
+        val activeTl = getActiveTimeline() ?: return
+        val clamped = time.coerceIn(0f, activeTl.duration.coerceAtLeast(10f))
+        _uiState.value = _uiState.value.copy(currentTime = clamped)
         evaluateAnimation(clamped)
     }
 
     fun resetToStart() {
-        pause()
+        pausePlayback()
         seekTo(0f)
-        sceneGraph.resetToBase()
-    }
-
-    fun evaluateAnimation(time: Float) {
-        AnimationEvaluator.evaluate(sceneGraph, timelines, timelineInstances, time)
     }
 
     fun toggleLoop() {
         _uiState.value = _uiState.value.copy(isLooping = !_uiState.value.isLooping)
     }
 
-    // --- Keyframe System ---
+    fun evaluateAnimation(time: Float) {
+        val activeTl = getActiveTimeline() ?: return
+        AnimationEvaluator.evaluateTimeline(activeTl, sceneGraph, time)
+        _uiState.value = _uiState.value.copy(version = System.currentTimeMillis())
+    }
+
+    // --- Action Block Management ---
+    fun addActionBlock(type: ActionBlockType) {
+        val activeTl = getActiveTimeline() ?: return
+        val rawTargetId = _uiState.value.selectedNodeId
+            ?: sceneGraph.nodes.values.firstOrNull { it.type == SceneNodeType.CHARACTER_ROOT }?.id
+            ?: sceneGraph.rootNodeIds.firstOrNull()
+            ?: return
+
+        val rawTargetNode = sceneGraph.getNode(rawTargetId) ?: return
+
+        // Resolve to character root if a child/limb part was selected
+        var targetNode = rawTargetNode
+        var currentCheck = rawTargetNode
+        while (currentCheck.parentId != null) {
+            val parent = sceneGraph.getNode(currentCheck.parentId!!) ?: break
+            currentCheck = parent
+            if (currentCheck.type == SceneNodeType.CHARACTER_ROOT) {
+                targetNode = currentCheck
+                break
+            }
+        }
+        val targetId = targetNode.id
+
+        val nextStartTime = if (activeTl.actionBlocks.isNotEmpty()) {
+            activeTl.actionBlocks.maxOf { it.startTime + it.duration }
+        } else {
+            0f
+        }
+
+        // Chain from previous block's end position if available
+        val prevBlocks = activeTl.actionBlocks.filter { it.targetNodeId == targetId }
+        val startPos = if (prevBlocks.isNotEmpty()) {
+            val lastBlock = prevBlocks.maxByOrNull { it.startTime }!!
+            lastBlock.targetPosition.copy()
+        } else {
+            targetNode.baseTransform.position.copy()
+        }
+
+        val targetOffset = when (type) {
+            ActionBlockType.WALK -> Vec3(0f, 0f, 4f)
+            ActionBlockType.RUN -> Vec3(0f, 0f, 6f)
+            ActionBlockType.JUMP -> Vec3(0f, 0f, 2f)
+            ActionBlockType.SLIDE_TO_POS -> Vec3(3f, 0f, 0f)
+            ActionBlockType.MOVE_TO_POS -> Vec3(0f, 0f, 3f)
+            else -> Vec3(0f, 0f, 0f)
+        }
+
+        val block = ActionBlock(
+            name = "${targetNode.name} ${type.displayName}",
+            type = type,
+            targetNodeId = targetId,
+            startTime = nextStartTime,
+            duration = type.defaultDuration,
+            trackRow = (activeTl.actionBlocks.size) % 3,
+            startPosition = startPos,
+            targetPosition = startPos + targetOffset
+        )
+        activeTl.addActionBlock(block)
+        SoundPlayer.playSound(SoundPlayer.SoundType.POP)
+        evaluateAnimation(_uiState.value.currentTime)
+        triggerRecomposition()
+    }
+
+    fun removeActionBlock(blockId: String) {
+        val activeTl = getActiveTimeline() ?: return
+        activeTl.removeActionBlock(blockId)
+        evaluateAnimation(_uiState.value.currentTime)
+        triggerRecomposition()
+    }
+
+    fun updateActionBlock(block: ActionBlock) {
+        val activeTl = getActiveTimeline() ?: return
+        val idx = activeTl.actionBlocks.indexOfFirst { it.id == block.id }
+        if (idx >= 0) {
+            activeTl.actionBlocks[idx] = block
+        }
+        evaluateAnimation(_uiState.value.currentTime)
+        triggerRecomposition()
+    }
+
+    // --- Keyframing ---
     fun addKeyframe(nodeId: String, propertyPath: String, value: Float) {
         val activeTl = getActiveTimeline() ?: return
         val track = activeTl.getOrCreateTrack(nodeId, propertyPath)
-        val kf = track.addOrUpdateKeyframe(_uiState.value.currentTime, value, Interpolation.SMOOTH)
-        SoundPlayer.playSound(SoundPlayer.SoundType.POP)
-        _uiState.value = _uiState.value.copy(
-            canUndo = historyManager.canUndo,
-            canRedo = historyManager.canRedo,
-            version = System.currentTimeMillis()
-        )
+        track.addOrUpdateKeyframe(_uiState.value.currentTime, value, Interpolation.LINEAR)
+        _uiState.value = _uiState.value.copy(version = System.currentTimeMillis())
+        evaluateAnimation(_uiState.value.currentTime)
     }
 
     fun keyframeAllTransform(nodeId: String) {
@@ -262,22 +392,6 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         SoundPlayer.playSound(SoundPlayer.SoundType.POP)
     }
 
-    fun deleteKeyframe(trackId: String, keyframeId: String) {
-        val activeTl = getActiveTimeline() ?: return
-        val track = activeTl.tracks.firstOrNull { it.id == trackId } ?: return
-        track.removeKeyframe(keyframeId)
-        _uiState.value = _uiState.value.copy(version = System.currentTimeMillis())
-    }
-
-    fun updateKeyframeInterpolation(trackId: String, keyframeId: String, interp: Interpolation) {
-        val activeTl = getActiveTimeline() ?: return
-        val track = activeTl.tracks.firstOrNull { it.id == trackId } ?: return
-        track.keyframes.firstOrNull { it.id == keyframeId }?.interpolation = interp
-        _uiState.value = _uiState.value.copy(version = System.currentTimeMillis())
-        evaluateAnimation(_uiState.value.currentTime)
-    }
-
-    // --- Presets ---
     fun applyPreset(presetType: PresetType) {
         val selectedId = _uiState.value.selectedNodeId ?: return
         val activeTl = getActiveTimeline() ?: return
@@ -292,23 +406,48 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         if (success) {
             SoundPlayer.playSound(SoundPlayer.SoundType.WHOOSH)
             evaluateAnimation(_uiState.value.currentTime)
-            _uiState.value = _uiState.value.copy(version = System.currentTimeMillis())
+            triggerRecomposition()
         }
     }
 
-    // --- Scene Objects Management ---
-    fun addBlock(textureId: String = "grass") {
-        val id = UUID.randomUUID().toString()
-        val camEye = camera.getEyePosition()
-        val camDir = (camera.target - camEye).normalized()
-        val spawnPos = camera.target + Vec3(0f, 0.5f, 0f)
+    // --- World Building Mode ---
+    fun enterWorldBuildingMode() {
+        _uiState.value = _uiState.value.copy(
+            isWorldBuildingMode = true,
+            isHierarchyOpen = false,
+            isInspectorOpen = false,
+            isTimelineOpen = false,
+            isAssetBrowserOpen = false
+        )
+    }
 
+    fun exitWorldBuildingMode() {
+        _uiState.value = _uiState.value.copy(isWorldBuildingMode = false)
+    }
+
+    fun setWorldBuildingTool(tool: WorldBuildingTool) {
+        _uiState.value = _uiState.value.copy(worldBuildingTool = tool)
+    }
+
+    fun setWorldBuildingTexture(textureId: String) {
+        _uiState.value = _uiState.value.copy(selectedBlockTexture = textureId)
+    }
+
+    fun addBlockAtCursor() {
+        val snapX = Math.round(camera.target.x).toFloat()
+        val snapY = Math.round(camera.target.y.coerceAtLeast(0f)).toFloat()
+        val snapZ = Math.round(camera.target.z).toFloat()
+        addBlockAt(Vec3(snapX, snapY, snapZ), _uiState.value.selectedBlockTexture)
+    }
+
+    fun addBlockAt(position: Vec3, textureId: String = _uiState.value.selectedBlockTexture) {
+        val id = UUID.randomUUID().toString()
         val node = SceneNode(
             id = id,
             name = "Block ${sceneGraph.nodes.size + 1}",
             type = SceneNodeType.BLOCK,
-            baseTransform = Transform(position = spawnPos),
-            animatedTransform = Transform(position = spawnPos),
+            baseTransform = Transform(position = position),
+            animatedTransform = Transform(position = position),
             material = Material(textureAssetId = textureId),
             boxDimensions = Vec3.ONE
         )
@@ -316,6 +455,25 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         selectNode(node.id)
         SoundPlayer.playSound(SoundPlayer.SoundType.STEP)
         updateHistoryState()
+    }
+
+    fun removeBlock(nodeId: String) {
+        val node = sceneGraph.getNode(nodeId) ?: return
+        historyManager.executeCommand(RemoveNodeCommand(sceneGraph, node, node.parentId))
+        if (_uiState.value.selectedNodeId == nodeId) {
+            selectNode(null)
+        }
+        SoundPlayer.playSound(SoundPlayer.SoundType.POP)
+        updateHistoryState()
+    }
+
+    // --- Scene Objects Management ---
+    fun addBlock(textureId: String = "grass") {
+        val spawnPos = sceneGraph.findNonOverlappingPosition(
+            requiredSpan = Vec3(1f, 1f, 1f),
+            preferredOrigin = camera.target + Vec3(0f, 0.5f, 0f)
+        )
+        addBlockAt(spawnPos, textureId)
     }
 
     fun addCharacter(isAlex: Boolean = false, skinId: String = if (isAlex) "alex" else "steve") {
@@ -326,12 +484,16 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
             "miner" -> "Miner"
             else -> "Steve"
         }
+        val spawnPos = sceneGraph.findNonOverlappingPosition(
+            requiredSpan = Vec3(1.5f, 2.0f, 1.5f),
+            preferredOrigin = camera.target
+        )
         val rootId = CharacterFactory.addCharacterToScene(
             sceneGraph = sceneGraph,
             name = "$name ${sceneGraph.nodes.count { it.value.characterPartType == com.star4droid.mc.animation.engine.scene.CharacterPartType.ROOT } + 1}",
             isAlex = isAlex,
             skinId = skinId,
-            position = camera.target
+            position = spawnPos
         )
         selectNode(rootId)
         SoundPlayer.playSound(SoundPlayer.SoundType.STEP)
@@ -391,11 +553,10 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
 
     fun updateNodeTransform(nodeId: String, newTransform: Transform) {
         val node = sceneGraph.getNode(nodeId) ?: return
-        val oldT = node.baseTransform.copyTransform()
         node.baseTransform = newTransform.copyTransform()
         node.animatedTransform = newTransform.copyTransform()
         sceneGraph.updateWorldMatrices()
-        _uiState.value = _uiState.value.copy(version = System.currentTimeMillis())
+        triggerRecomposition()
     }
 
     fun updateNodeMaterial(nodeId: String, textureAssetId: String, opacity: Float = 1.0f) {
@@ -404,7 +565,85 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
             textureAssetId = textureAssetId,
             opacity = opacity
         )
-        _uiState.value = _uiState.value.copy(version = System.currentTimeMillis())
+        triggerRecomposition()
+    }
+
+    // --- Multi-Scene Management ---
+    private fun saveCurrentNodesToScene(scene: SceneItem) {
+        scene.nodes.clear()
+        scene.nodes.putAll(sceneGraph.nodes)
+        scene.rootIds.clear()
+        scene.rootIds.addAll(sceneGraph.rootNodeIds)
+    }
+
+    private fun loadNodesFromScene(scene: SceneItem) {
+        sceneGraph.nodes.clear()
+        sceneGraph.nodes.putAll(scene.nodes)
+        sceneGraph.rootNodeIds.clear()
+        sceneGraph.rootNodeIds.addAll(scene.rootIds)
+        sceneGraph.updateWorldMatrices()
+        selectNode(sceneGraph.rootNodeIds.firstOrNull())
+    }
+
+    fun createScene(name: String) {
+        val activeScene = scenesList.firstOrNull { it.id == _uiState.value.activeSceneId }
+        if (activeScene != null) {
+            saveCurrentNodesToScene(activeScene)
+        }
+        val newScene = SceneItem(name = name)
+        scenesList.add(newScene)
+        loadNodesFromScene(newScene)
+        _uiState.value = _uiState.value.copy(
+            scenes = scenesList.toList(),
+            activeSceneId = newScene.id
+        )
+        triggerRecomposition()
+    }
+
+    fun switchScene(sceneId: String) {
+        val activeScene = scenesList.firstOrNull { it.id == _uiState.value.activeSceneId }
+        if (activeScene != null) {
+            saveCurrentNodesToScene(activeScene)
+        }
+        val targetScene = scenesList.firstOrNull { it.id == sceneId } ?: return
+        loadNodesFromScene(targetScene)
+        _uiState.value = _uiState.value.copy(
+            scenes = scenesList.toList(),
+            activeSceneId = targetScene.id
+        )
+        triggerRecomposition()
+    }
+
+    fun renameScene(sceneId: String, newName: String) {
+        val scene = scenesList.firstOrNull { it.id == sceneId } ?: return
+        scene.name = newName
+        _uiState.value = _uiState.value.copy(scenes = scenesList.toList())
+        triggerRecomposition()
+    }
+
+    fun deleteScene(sceneId: String) {
+        if (scenesList.size <= 1) return // Keep at least one
+        scenesList.removeAll { it.id == sceneId }
+        val next = scenesList.first()
+        loadNodesFromScene(next)
+        _uiState.value = _uiState.value.copy(
+            scenes = scenesList.toList(),
+            activeSceneId = next.id
+        )
+        triggerRecomposition()
+    }
+
+    fun emptyScene(sceneId: String) {
+        val scene = scenesList.firstOrNull { it.id == sceneId } ?: return
+        scene.nodes.clear()
+        scene.rootIds.clear()
+        if (_uiState.value.activeSceneId == sceneId) {
+            sceneGraph.nodes.clear()
+            sceneGraph.rootNodeIds.clear()
+            sceneGraph.updateWorldMatrices()
+            selectNode(null)
+        }
+        triggerRecomposition()
     }
 
     // --- Undo / Redo ---
@@ -450,7 +689,7 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         evaluateAnimation(0f)
     }
 
-    // --- Panels Toggles ---
+    // --- Panels & Dialog Toggles ---
     fun toggleHierarchy() {
         _uiState.value = _uiState.value.copy(isHierarchyOpen = !_uiState.value.isHierarchyOpen)
     }
@@ -465,6 +704,22 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
 
     fun toggleAssetBrowser() {
         _uiState.value = _uiState.value.copy(isAssetBrowserOpen = !_uiState.value.isAssetBrowserOpen)
+    }
+
+    fun toggleFileBrowser() {
+        _uiState.value = _uiState.value.copy(isFileBrowserOpen = !_uiState.value.isFileBrowserOpen)
+    }
+
+    fun toggleSideAi() {
+        _uiState.value = _uiState.value.copy(isSideAiOpen = !_uiState.value.isSideAiOpen)
+    }
+
+    fun toggleSceneManager() {
+        _uiState.value = _uiState.value.copy(isSceneManagerOpen = !_uiState.value.isSceneManagerOpen)
+    }
+
+    fun triggerRecomposition() {
+        _uiState.value = _uiState.value.copy(version = System.currentTimeMillis())
     }
 
     // --- Persistence ---

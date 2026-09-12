@@ -326,16 +326,20 @@ object BuiltInAssets {
     }
 
     /**
-     * Generates crisp authentic 16x16 pixel-art Minecraft textures for Steve and Alex.
+     * Generates an authentic procedural Minecraft character texture.
+     * Head parts produce a 32x16 atlas matching Minecraft's UV mapping
+     * so that the face is ONLY on the front, hair on top/back/sides, and neck on bottom.
      */
     fun createProceduralCharacterBitmap(partId: String): Bitmap {
-        val size = 16
-        val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
-        val pixels = IntArray(size * size)
+        val isHead = partId.contains("_head")
+        val width = if (isHead) 32 else 16
+        val height = 16
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val pixels = IntArray(width * height)
 
         fun setPx(x: Int, y: Int, color: Int) {
-            if (x in 0 until size && y in 0 until size) {
-                pixels[y * size + x] = color
+            if (x in 0 until width && y in 0 until height) {
+                pixels[y * width + x] = color
             }
         }
 
@@ -345,7 +349,6 @@ object BuiltInAssets {
 
         // Color palettes
         val steveHair = rgb(74, 50, 30)
-        val steveHairDark = rgb(54, 34, 19)
         val steveSkin = rgb(217, 160, 116)
         val steveSkinDark = rgb(186, 131, 88)
         val steveEyeBlue = rgb(43, 53, 120)
@@ -353,10 +356,7 @@ object BuiltInAssets {
         val steveBeard = rgb(91, 55, 33)
         val steveShirt = rgb(0, 168, 168)
         val steveShirtDark = rgb(0, 136, 136)
-        val steveShirtLight = rgb(24, 184, 184)
         val steveJeans = rgb(44, 62, 138)
-        val steveJeansDark = rgb(33, 47, 108)
-        val steveShoes = rgb(74, 74, 74)
 
         val alexHair = rgb(180, 86, 36)
         val alexSkin = rgb(232, 185, 157)
@@ -368,53 +368,160 @@ object BuiltInAssets {
 
         when {
             partId.contains("steve_head") -> {
-                for (y in 0 until size) {
-                    for (x in 0 until size) {
-                        // Hair on top (rows 0..3) and sides
-                        val isTopHair = (y in 0..3)
-                        val isSideHair = (y in 4..7 && (x in 0..1 || x in 14..15))
-                        if (isTopHair || isSideHair) {
+                // 1. Top of head hair: (x: 8..15, y: 0..7)
+                for (y in 0..7) {
+                    for (x in 8..15) {
+                        val noise = ((x * 7 + y * 13) % 15) - 7
+                        setPx(x, y, rgb(74 + noise, 50 + noise, 30 + noise))
+                    }
+                }
+                // 2. Bottom of head / neck: (x: 16..23, y: 0..7)
+                for (y in 0..7) {
+                    for (x in 16..23) {
+                        val noise = ((x * 11 + y * 13) % 11) - 5
+                        setPx(x, y, rgb(217 + noise, 160 + noise, 116 + noise))
+                    }
+                }
+                // 3. Right of head hair: (x: 0..7, y: 8..15)
+                for (y in 8..15) {
+                    for (x in 0..7) {
+                        if (y in 12..13 && x in 3..4) {
+                            setPx(x, y, steveSkin) // ear
+                        } else {
                             val noise = ((x * 7 + y * 13) % 15) - 7
                             setPx(x, y, rgb(74 + noise, 50 + noise, 30 + noise))
-                        } else if (y in 8..9 && (x in 3..4 || x in 11..12)) {
+                        }
+                    }
+                }
+                // 4. Front Face: (x: 8..15, y: 8..15)
+                for (y in 8..15) {
+                    for (x in 8..15) {
+                        val localX = x - 8
+                        val localY = y - 8
+                        when {
+                            // Hair fringe on forehead
+                            localY in 0..1 || (localY == 2 && (localX in 0..1 || localX in 6..7)) -> {
+                                val noise = ((x * 7 + y * 13) % 15) - 7
+                                setPx(x, y, rgb(74 + noise, 50 + noise, 30 + noise))
+                            }
                             // Eyes
-                            val isLeftSclera = (x == 3)
-                            val isRightSclera = (x == 12)
-                            if (isLeftSclera || isRightSclera) {
-                                setPx(x, y, steveEyeWhite)
-                            } else {
-                                setPx(x, y, steveEyeBlue)
-                            }
-                        } else if (y in 9..10 && x in 7..8) {
+                            localY == 3 && (localX == 1 || localX == 6) -> setPx(x, y, steveEyeWhite)
+                            localY == 3 && (localX == 2 || localX == 5) -> setPx(x, y, steveEyeBlue)
                             // Nose
-                            setPx(x, y, steveSkinDark)
-                        } else if (y in 11..13 && x in 5..10) {
-                            // Beard and mouth
-                            if (y == 11 && x in 6..9) {
-                                setPx(x, y, rgb(140, 70, 60)) // mouth
-                            } else {
-                                setPx(x, y, steveBeard)
-                            }
-                        } else {
+                            localY == 4 && localX in 3..4 -> setPx(x, y, steveSkinDark)
+                            // Mouth & Beard
+                            localY == 5 && localX in 3..4 -> setPx(x, y, rgb(140, 70, 60))
+                            localY in 5..7 && (localX in 2..5 || localY == 7) -> setPx(x, y, steveBeard)
                             // Face skin
-                            val noise = ((x * 11 + y * 17) % 15) - 7
-                            setPx(x, y, rgb(217 + noise, 160 + noise, 116 + noise))
+                            else -> {
+                                val noise = ((x * 11 + y * 17) % 13) - 6
+                                setPx(x, y, rgb(217 + noise, 160 + noise, 116 + noise))
+                            }
+                        }
+                    }
+                }
+                // 5. Left of head hair: (x: 16..23, y: 8..15)
+                for (y in 8..15) {
+                    for (x in 16..23) {
+                        if (y in 12..13 && x in 19..20) {
+                            setPx(x, y, steveSkin) // ear
+                        } else {
+                            val noise = ((x * 7 + y * 13) % 15) - 7
+                            setPx(x, y, rgb(74 + noise, 50 + noise, 30 + noise))
+                        }
+                    }
+                }
+                // 6. Back of head hair: (x: 24..31, y: 8..15)
+                for (y in 8..15) {
+                    for (x in 24..31) {
+                        val noise = ((x * 7 + y * 13) % 15) - 7
+                        setPx(x, y, rgb(74 + noise, 50 + noise, 30 + noise))
+                    }
+                }
+            }
+            partId.contains("alex_head") -> {
+                // Top
+                for (y in 0..7) {
+                    for (x in 8..15) {
+                        val noise = ((x * 7 + y * 11) % 15) - 7
+                        setPx(x, y, rgb(180 + noise, 86 + noise, 36 + noise))
+                    }
+                }
+                // Bottom
+                for (y in 0..7) {
+                    for (x in 16..23) {
+                        setPx(x, y, alexSkin)
+                    }
+                }
+                // Right hair
+                for (y in 8..15) {
+                    for (x in 0..7) {
+                        val noise = ((x * 7 + y * 11) % 15) - 7
+                        setPx(x, y, rgb(180 + noise, 86 + noise, 36 + noise))
+                    }
+                }
+                // Front face
+                for (y in 8..15) {
+                    for (x in 8..15) {
+                        val localX = x - 8
+                        val localY = y - 8
+                        when {
+                            localY in 0..1 -> {
+                                val noise = ((x * 7 + y * 11) % 15) - 7
+                                setPx(x, y, rgb(180 + noise, 86 + noise, 36 + noise))
+                            }
+                            localY == 3 && (localX == 1 || localX == 6) -> setPx(x, y, steveEyeWhite)
+                            localY == 3 && (localX == 2 || localX == 5) -> setPx(x, y, alexEyeGreen)
+                            localY == 5 && localX in 3..4 -> setPx(x, y, rgb(190, 110, 100))
+                            else -> {
+                                val noise = ((x * 11 + y * 13) % 11) - 5
+                                setPx(x, y, rgb(232 + noise, 185 + noise, 157 + noise))
+                            }
+                        }
+                    }
+                }
+                // Left hair & Back hair
+                for (y in 8..15) {
+                    for (x in 16..31) {
+                        val noise = ((x * 7 + y * 11) % 15) - 7
+                        setPx(x, y, rgb(180 + noise, 86 + noise, 36 + noise))
+                    }
+                }
+            }
+            partId.contains("zombie_head") -> {
+                val zSkin = rgb(86, 138, 70)
+                val zHair = rgb(45, 80, 40)
+                for (y in 0..7) {
+                    for (x in 8..15) setPx(x, y, zHair)
+                    for (x in 16..23) setPx(x, y, zSkin)
+                }
+                for (y in 8..15) {
+                    for (x in 0..7) setPx(x, y, zHair)
+                    for (x in 24..31) setPx(x, y, zHair)
+                    for (x in 16..23) setPx(x, y, zHair)
+                    for (x in 8..15) {
+                        val localX = x - 8
+                        val localY = y - 8
+                        if (localY == 3 && (localX in 1..2 || localX in 5..6)) {
+                            setPx(x, y, rgb(20, 20, 20))
+                        } else if (localY == 5 && localX in 3..4) {
+                            setPx(x, y, rgb(30, 50, 25))
+                        } else {
+                            val noise = ((x * 7 + y * 13) % 15) - 7
+                            setPx(x, y, rgb(86 + noise, 138 + noise, 70 + noise))
                         }
                     }
                 }
             }
             partId.contains("steve_body") -> {
-                for (y in 0 until size) {
-                    for (x in 0 until size) {
-                        // V-neck skin collar at top
+                for (y in 0 until 16) {
+                    for (x in 0 until 16) {
                         val isVNeck = (y in 0..2 && x in 6..9) || (y == 3 && x in 7..8)
                         if (isVNeck) {
                             setPx(x, y, steveSkin)
                         } else if (y >= 14) {
-                            // Belt / waist tuck into pants
                             setPx(x, y, steveJeans)
                         } else {
-                            // Cyan shirt with shading folds
                             val noise = ((x * 13 + y * 19) % 21) - 10
                             val isSideFold = (x == 0 || x == 15 || y == 13)
                             val base = if (isSideFold) steveShirtDark else steveShirt
@@ -427,14 +534,12 @@ object BuiltInAssets {
                 }
             }
             partId.contains("steve_arm") -> {
-                for (y in 0 until size) {
-                    for (x in 0 until size) {
+                for (y in 0 until 16) {
+                    for (x in 0 until 16) {
                         if (y in 0..3) {
-                            // Cyan short sleeve
                             val noise = ((x * 7 + y * 11) % 15) - 7
                             setPx(x, y, rgb(0, 168 + noise, 168 + noise))
                         } else {
-                            // Tan skin arm and hand
                             val noise = ((x * 11 + y * 13) % 15) - 7
                             setPx(x, y, rgb(217 + noise, 160 + noise, 116 + noise))
                         }
@@ -442,42 +547,21 @@ object BuiltInAssets {
                 }
             }
             partId.contains("steve_leg") -> {
-                for (y in 0 until size) {
-                    for (x in 0 until size) {
+                for (y in 0 until 16) {
+                    for (x in 0 until 16) {
                         if (y >= 13) {
-                            // Dark gray shoes
                             val noise = ((x * 7 + y * 13) % 11) - 5
                             setPx(x, y, rgb(74 + noise, 74 + noise, 74 + noise))
                         } else {
-                            // Denim jeans
                             val noise = ((x * 11 + y * 17) % 17) - 8
                             setPx(x, y, rgb(44 + noise, 62 + noise, 138 + noise))
                         }
                     }
                 }
             }
-            partId.contains("alex_head") -> {
-                for (y in 0 until size) {
-                    for (x in 0 until size) {
-                        val isTopHair = (y in 0..3)
-                        val isSideHair = (y in 4..9 && (x in 0..2 || x in 13..15))
-                        if (isTopHair || isSideHair) {
-                            val noise = ((x * 7 + y * 11) % 15) - 7
-                            setPx(x, y, rgb(180 + noise, 86 + noise, 36 + noise))
-                        } else if (y in 8..9 && (x in 3..4 || x in 11..12)) {
-                            val isLeftSclera = (x == 3)
-                            val isRightSclera = (x == 12)
-                            if (isLeftSclera || isRightSclera) setPx(x, y, steveEyeWhite) else setPx(x, y, alexEyeGreen)
-                        } else {
-                            val noise = ((x * 11 + y * 13) % 11) - 5
-                            setPx(x, y, rgb(232 + noise, 185 + noise, 157 + noise))
-                        }
-                    }
-                }
-            }
             partId.contains("alex_body") -> {
-                for (y in 0 until size) {
-                    for (x in 0 until size) {
+                for (y in 0 until 16) {
+                    for (x in 0 until 16) {
                         val isCollar = (y in 0..1 && x in 7..8)
                         val isBelt = (y in 10..11)
                         if (isCollar) {
@@ -494,8 +578,8 @@ object BuiltInAssets {
                 }
             }
             partId.contains("alex_arm") -> {
-                for (y in 0 until size) {
-                    for (x in 0 until size) {
+                for (y in 0 until 16) {
+                    for (x in 0 until 16) {
                         if (y in 0..3) {
                             setPx(x, y, alexTunic)
                         } else {
@@ -505,23 +589,30 @@ object BuiltInAssets {
                 }
             }
             partId.contains("alex_leg") -> {
-                for (y in 0 until size) {
-                    for (x in 0 until size) {
+                for (y in 0 until 16) {
+                    for (x in 0 until 16) {
                         if (y >= 12) setPx(x, y, alexBoots) else setPx(x, y, alexPants)
                     }
                 }
             }
             else -> {
-                // Fallback skin
-                for (y in 0 until size) {
-                    for (x in 0 until size) {
+                for (y in 0 until 16) {
+                    for (x in 0 until 16) {
                         setPx(x, y, steveSkin)
                     }
                 }
             }
         }
 
-        bitmap.setPixels(pixels, 0, size, 0, 0, size, size)
+        bitmap.setPixels(pixels, 0, width, 0, 0, width, height)
         return bitmap
     }
+
+    val customBitmaps = mutableMapOf<String, Bitmap>()
+
+    fun registerCustomTexture(id: String, bitmap: Bitmap) {
+        customBitmaps[id] = bitmap
+    }
+
+    fun getCustomBitmap(id: String): Bitmap? = customBitmaps[id]
 }

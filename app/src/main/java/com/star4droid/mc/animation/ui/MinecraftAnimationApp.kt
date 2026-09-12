@@ -31,7 +31,9 @@ private val StudioDarkColorScheme = darkColorScheme(
 )
 
 @Composable
-fun MinecraftAnimationApp() {
+fun MinecraftAnimationApp(
+    onToggleOrientation: () -> Unit = {}
+) {
     MaterialTheme(colorScheme = StudioDarkColorScheme) {
         Surface(
             modifier = Modifier.fillMaxSize(),
@@ -44,7 +46,8 @@ fun MinecraftAnimationApp() {
                     ProjectListScreen(
                         onOpenProject = { projectId ->
                             navController.navigate("editor/$projectId")
-                        }
+                        },
+                        onToggleOrientation = onToggleOrientation
                     )
                 }
 
@@ -57,7 +60,8 @@ fun MinecraftAnimationApp() {
                         projectId = projectId,
                         onBack = {
                             navController.popBackStack()
-                        }
+                        },
+                        onToggleOrientation = onToggleOrientation
                     )
                 }
             }
