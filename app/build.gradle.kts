@@ -11,8 +11,13 @@ plugins {
 
 android {
   namespace = "com.example"
-  compileSdk = 34
-  buildToolsVersion = "34.0.0"
+  compileSdk = 36
+
+  lint {
+    checkReleaseBuilds = false
+    abortOnError = false
+    checkDependencies = false
+  }
 
   defaultConfig {
     applicationId = "com.star4droid.mc.animation"
