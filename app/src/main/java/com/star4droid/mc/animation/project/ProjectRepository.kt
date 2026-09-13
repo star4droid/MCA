@@ -640,8 +640,9 @@ class ProjectRepository(private val context: Context) {
         put("actionBlocks", blocksArr)
     }
 
-    fun saveAnimationFile(name: String, blocks: List<ActionBlock>): File {
-        val animDir = File(externalBaseDir, "saved_animations").apply { if (!exists()) mkdirs() }
+    fun saveAnimationFile(projectId: String, name: String, blocks: List<ActionBlock>): File {
+        val dir = if (projectId.isNotBlank()) getProjectDir(projectId) else externalBaseDir
+        val animDir = File(dir, "animations").apply { if (!exists()) mkdirs() }
         val sanitized = name.replace(Regex("[^a-zA-Z0-9_-]"), "_")
         val file = File(animDir, "$sanitized.mcanim")
         val root = JSONObject().apply {
@@ -677,6 +678,28 @@ class ProjectRepository(private val context: Context) {
         }
         file.writeText(root.toString(2))
         return file
+    }
+
+    fun saveAnimationFile(name: String, blocks: List<ActionBlock>): File = saveAnimationFile("", name, blocks)
+
+    fun listSavedAnimations(projectId: String = ""): List<File> {
+        val result = mutableListOf<File>()
+        if (projectId.isNotBlank()) {
+            val projDir = getProjectDir(projectId)
+            val projAnimDir = File(projDir, "animations")
+            if (projAnimDir.exists()) {
+                projAnimDir.listFiles()?.filter { it.name.endsWith(".mcanim") }?.let { result.addAll(it) }
+            }
+        }
+        val globalAnimDir = File(externalBaseDir, "saved_animations")
+        if (globalAnimDir.exists()) {
+            globalAnimDir.listFiles()?.filter { it.name.endsWith(".mcanim") }?.forEach { f ->
+                if (result.none { it.name == f.name }) {
+                    result.add(f)
+                }
+            }
+        }
+        return result.sortedBy { it.name }
     }
 
     fun loadAnimationFile(file: File): List<ActionBlock> {

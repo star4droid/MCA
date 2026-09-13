@@ -3,8 +3,12 @@ package com.star4droid.mc.animation.ui.inspector
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.input.pointer.changedToUp
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -804,9 +808,6 @@ fun TransformChannelGroup(
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             values.forEachIndexed { idx, v ->
-                var totalDrag by remember { mutableStateOf(0f) }
-                var isDragging by remember { mutableStateOf(false) }
-
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -814,29 +815,37 @@ fun TransformChannelGroup(
                         .background(Color(0xFF0F172A))
                         .border(1.dp, Color(0xFF334155), RoundedCornerShape(6.dp))
                         .pointerInput(idx) {
-                            detectDragGestures(
-                                onDragStart = {
-                                    totalDrag = 0f
-                                    isDragging = false
-                                },
-                                onDragEnd = {
-                                    if (!isDragging) {
-                                        activeFieldIndex = idx
+                            awaitPointerEventScope {
+                                while (true) {
+                                    awaitFirstDown(requireUnconsumed = false)
+                                    var isDragging = false
+                                    var totalDragAmount = 0f
+
+                                    while (true) {
+                                        val event = awaitPointerEvent()
+                                        val change = event.changes.firstOrNull() ?: break
+
+                                        if (change.changedToUp()) {
+                                            if (!isDragging) {
+                                                activeFieldIndex = idx
+                                            }
+                                            break
+                                        } else if (change.pressed) {
+                                            val dragDelta = change.positionChange().x
+                                            totalDragAmount += dragDelta
+
+                                            if (kotlin.math.abs(totalDragAmount) > 6f || isDragging) {
+                                                isDragging = true
+                                                change.consume()
+                                                val delta = dragDelta * sensitivity
+                                                currentOnValueChange(idx, currentValues[idx] + delta)
+                                            }
+                                        } else {
+                                            break
+                                        }
                                     }
-                                },
-                                onDragCancel = {
-                                    isDragging = false
-                                },
-                                onDrag = { change, dragAmount ->
-                                    change.consume()
-                                    totalDrag += Math.abs(dragAmount.x) + Math.abs(dragAmount.y)
-                                    if (totalDrag > 5f) {
-                                        isDragging = true
-                                    }
-                                    val delta = dragAmount.x * sensitivity
-                                    currentOnValueChange(idx, currentValues[idx] + delta)
                                 }
-                            )
+                            }
                         }
                         .padding(horizontal = 6.dp, vertical = 6.dp),
                     contentAlignment = Alignment.CenterStart
@@ -892,7 +901,7 @@ fun NumericKeypadDialog(
             color = Color(0xFF1E293B),
             tonalElevation = 8.dp,
             modifier = Modifier
-                .width(240.dp)
+                .width(260.dp)
                 .padding(4.dp)
         ) {
             Column(
@@ -923,12 +932,12 @@ fun NumericKeypadDialog(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // Keypad grid
+                // Keypad grid with Del, Erase, Set buttons
                 val keys = listOf(
-                    listOf("1", "2", "3", "BACK"),
-                    listOf("4", "5", "6", "CLEAR"),
+                    listOf("1", "2", "3", "Del"),
+                    listOf("4", "5", "6", "Erase"),
                     listOf("7", "8", "9", "-"),
-                    listOf(".", "0", "OK")
+                    listOf(".", "0", "Set")
                 )
 
                 keys.forEach { row ->
@@ -942,9 +951,9 @@ fun NumericKeypadDialog(
                             Surface(
                                 onClick = {
                                     when (key) {
-                                        "BACK" -> if (textState.isNotEmpty()) textState = textState.dropLast(1)
-                                        "CLEAR" -> textState = ""
-                                        "OK" -> {
+                                        "Del" -> if (textState.isNotEmpty()) textState = textState.dropLast(1)
+                                        "Erase" -> textState = ""
+                                        "Set" -> {
                                             val parsed = textState.toFloatOrNull() ?: initialValue
                                             onConfirm(parsed)
                                         }
@@ -956,19 +965,32 @@ fun NumericKeypadDialog(
                                 },
                                 shape = RoundedCornerShape(6.dp),
                                 color = when (key) {
-                                    "OK" -> Color(0xFF22C55E)
-                                    "BACK", "CLEAR" -> Color(0xFFEF4444)
+                                    "Set" -> Color(0xFF22C55E)
+                                    "Erase" -> Color(0xFFEF4444)
+                                    "Del" -> Color(0xFFDC2626)
                                     else -> Color(0xFF334155)
                                 },
                                 modifier = Modifier
-                                    .weight(if (key == "OK") 2f else 1f)
-                                    .height(34.dp)
+                                    .weight(if (key == "Set") 2f else 1f)
+                                    .height(36.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     when (key) {
-                                        "BACK" -> Icon(Icons.Default.Backspace, contentDescription = "Delete", tint = Color.White, modifier = Modifier.size(14.dp))
-                                        "CLEAR" -> Icon(Icons.Default.Clear, contentDescription = "Erase", tint = Color.White, modifier = Modifier.size(14.dp))
-                                        "OK" -> Icon(Icons.Default.Check, contentDescription = "Confirm", tint = Color.White, modifier = Modifier.size(16.dp))
+                                        "Del" -> Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.Backspace, contentDescription = "Delete", tint = Color.White, modifier = Modifier.size(12.dp))
+                                            Spacer(modifier = Modifier.width(2.dp))
+                                            Text("Del", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                        }
+                                        "Erase" -> Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.Clear, contentDescription = "Erase", tint = Color.White, modifier = Modifier.size(12.dp))
+                                            Spacer(modifier = Modifier.width(2.dp))
+                                            Text("Erase", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                        }
+                                        "Set" -> Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.Check, contentDescription = "Set", tint = Color.White, modifier = Modifier.size(14.dp))
+                                            Spacer(modifier = Modifier.width(3.dp))
+                                            Text("Set", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                        }
                                         else -> Text(key, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
                                     }
                                 }

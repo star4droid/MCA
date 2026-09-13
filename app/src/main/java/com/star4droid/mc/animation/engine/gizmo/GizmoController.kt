@@ -114,6 +114,49 @@ class GizmoController(
         }
     }
 
+    private var pickerInitialPos: Vec3? = null
+
+    fun startPickerDrag(position: Vec3, axis: GizmoAxis, initialRay: Ray) {
+        activeAxis = axis
+        pickerInitialPos = position
+        val planeNormal = when (axis) {
+            GizmoAxis.Y -> Vec3(initialRay.direction.x, 0f, initialRay.direction.z).normalized()
+            GizmoAxis.X, GizmoAxis.Z -> Vec3(0f, 1f, 0f)
+            else -> -initialRay.direction
+        }
+        val t = initialRay.intersectPlane(position, planeNormal)
+        dragStartPlanePoint = if (t != null) initialRay.getPoint(t) else position
+    }
+
+    fun updatePickerDrag(currentRay: Ray): Vec3? {
+        val startPt = dragStartPlanePoint ?: return null
+        val initPos = pickerInitialPos ?: return null
+
+        val planeNormal = when (activeAxis) {
+            GizmoAxis.Y -> Vec3(currentRay.direction.x, 0f, currentRay.direction.z).normalized()
+            GizmoAxis.X, GizmoAxis.Z -> Vec3(0f, 1f, 0f)
+            else -> -currentRay.direction
+        }
+
+        val t = currentRay.intersectPlane(startPt, planeNormal) ?: return null
+        val curPt = currentRay.getPoint(t)
+        val delta = curPt - startPt
+
+        return when (activeAxis) {
+            GizmoAxis.X -> initPos.copy(x = initPos.x + delta.x)
+            GizmoAxis.Y -> initPos.copy(y = initPos.y + delta.y)
+            GizmoAxis.Z -> initPos.copy(z = initPos.z + delta.z)
+            GizmoAxis.CENTER -> initPos + delta
+            GizmoAxis.NONE -> null
+        }
+    }
+
+    fun endPickerDrag() {
+        activeAxis = GizmoAxis.NONE
+        dragStartPlanePoint = null
+        pickerInitialPos = null
+    }
+
     fun startDrag(selectedNode: SceneNode, axis: GizmoAxis, initialRay: Ray) {
         activeAxis = axis
         if (currentMode == EditorMode.SCALE && selectedNode.type == SceneNodeType.CHARACTER_PART) {

@@ -200,6 +200,7 @@ fun TimelinePanel(
     getSavedAnimationFiles: (() -> List<java.io.File>)? = null,
     onApplyCustomPreset: ((CustomBlockPreset) -> Unit)? = null,
     onExportMp4: (() -> Unit)? = null,
+    onStartPicker: ((String, Vec3) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val duration = (timeline?.duration ?: 10.0f).coerceAtLeast(10f)
@@ -240,7 +241,8 @@ fun TimelinePanel(
             },
             onRemoveCustom = { blockId ->
                 onRemoveCustomBlockSettings(blockId)
-            }
+            },
+            onStartPicker = onStartPicker
         )
     }
 

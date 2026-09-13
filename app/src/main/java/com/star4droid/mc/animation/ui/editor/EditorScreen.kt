@@ -10,9 +10,16 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.changedToUp
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.text.font.FontFamily
+import com.star4droid.mc.animation.engine.math.Vec3
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,6 +32,8 @@ import com.star4droid.mc.animation.assets.BuiltInAssets
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
@@ -615,9 +624,9 @@ fun EditorScreen(
                             onClose = { viewModel.toggleTimeline() },
                             onExportAnimation = { animName -> viewModel.exportCurrentAnimation(animName) },
                             onImportAnimation = { file -> viewModel.importAnimation(file) },
-                            getSavedAnimationFiles = { viewModel.getSavedAnimationFiles() },
                             onApplyCustomPreset = { preset -> viewModel.applyCustomBlockPreset(preset) },
                             onExportMp4 = { isMp4ExportDialogOpen = true },
+                            onStartPicker = { blockId, initPos -> viewModel.startPositionPicker(blockId, initPos) },
                             modifier = Modifier.width(timelineWidth).fillMaxHeight(0.85f)
                         )
 
@@ -672,6 +681,7 @@ fun EditorScreen(
                             getSavedAnimationFiles = { viewModel.getSavedAnimationFiles() },
                             onApplyCustomPreset = { preset -> viewModel.applyCustomBlockPreset(preset) },
                             onExportMp4 = { isMp4ExportDialogOpen = true },
+                            onStartPicker = { blockId, initPos -> viewModel.startPositionPicker(blockId, initPos) },
                             modifier = Modifier.height(timelineHeight)
                         )
                     }
@@ -795,9 +805,218 @@ fun EditorScreen(
                 }
             }
         }
+
+        // Position Picker Mode Overlay
+        if (uiState.isPositionPickerActive) {
+            PositionPickerOverlay(
+                uiState = uiState,
+                onUpdatePosition = { pos -> viewModel.updatePickedPosition(pos) },
+                onConfirm = {
+                    viewModel.confirmPickedPosition { pickedPos ->
+                        val targetBlockId = uiState.pickerTargetBlockId
+                        if (targetBlockId != null) {
+                            val activeTl = viewModel.getActiveTimeline()
+                            val block = activeTl?.actionBlocks?.firstOrNull { it.id == targetBlockId }
+                            if (block != null) {
+                                viewModel.updateActionBlock(block.copy(targetPosition = pickedPos, moveVector = pickedPos))
+                            }
+                        }
+                    }
+                },
+                onCancel = { viewModel.cancelPositionPicker() },
+                modifier = Modifier.align(Alignment.BottomCenter)
+            )
+        }
     }
 }
 }
+}
+
+@Composable
+fun PositionPickerOverlay(
+    uiState: EditorUiState,
+    onUpdatePosition: (Vec3) -> Unit,
+    onConfirm: () -> Unit,
+    onCancel: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var activeKeypadAxis by remember { mutableStateOf<Int?>(null) }
+    val currentPos = uiState.pickerPickedPosition
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        contentAlignment = Alignment.BottomCenter
+    ) {
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = Color(0xFF1E293B),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF0284C7)),
+            tonalElevation = 8.dp,
+            modifier = Modifier.fillMaxWidth(0.9f)
+        ) {
+            Column(
+                modifier = Modifier.padding(14.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.LocationOn,
+                            contentDescription = null,
+                            tint = Color(0xFF38BDF8),
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            "Position Picker Mode",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            color = Color.White
+                        )
+                    }
+                    Text(
+                        "Drag 3D Gizmo, drag fields, or click to enter",
+                        fontSize = 11.sp,
+                        color = Color(0xFF94A3B8)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val axes = listOf(
+                        Triple("X", currentPos.x, Color(0xFFEF4444)),
+                        Triple("Y", currentPos.y, Color(0xFF22C55E)),
+                        Triple("Z", currentPos.z, Color(0xFF3B82F6))
+                    )
+
+                    axes.forEachIndexed { idx, (label, valVal, color) ->
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0xFF0F172A))
+                                .border(1.dp, color.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                                .pointerInput(idx) {
+                                    awaitPointerEventScope {
+                                        while (true) {
+                                            awaitFirstDown(requireUnconsumed = false)
+                                            var isDragging = false
+                                            var totalDragAmount = 0f
+
+                                            while (true) {
+                                                val event = awaitPointerEvent()
+                                                val change = event.changes.firstOrNull() ?: break
+
+                                                if (change.changedToUp()) {
+                                                    if (!isDragging) {
+                                                        activeKeypadAxis = idx
+                                                    }
+                                                    break
+                                                } else if (change.pressed) {
+                                                    val dragDelta = change.positionChange().x
+                                                    totalDragAmount += dragDelta
+
+                                                    if (kotlin.math.abs(totalDragAmount) > 6f || isDragging) {
+                                                        isDragging = true
+                                                        change.consume()
+                                                        val delta = dragDelta * 0.1f
+                                                        val updated = when (idx) {
+                                                            0 -> currentPos.copy(x = currentPos.x + delta)
+                                                            1 -> currentPos.copy(y = currentPos.y + delta)
+                                                            else -> currentPos.copy(z = currentPos.z + delta)
+                                                        }
+                                                        onUpdatePosition(updated)
+                                                    }
+                                                } else {
+                                                    break
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                .padding(horizontal = 8.dp, vertical = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(label, fontWeight = FontWeight.Bold, color = color, fontSize = 11.sp)
+                                Text(
+                                    String.format("%.2f", valVal),
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = onConfirm,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF22C55E)),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Confirm Position", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    Button(
+                        onClick = onCancel,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444)),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Cancel", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+
+    if (activeKeypadAxis != null) {
+        val targetIdx = activeKeypadAxis!!
+        val labels = listOf("X", "Y", "Z")
+        val initialVal = when (targetIdx) {
+            0 -> currentPos.x
+            1 -> currentPos.y
+            else -> currentPos.z
+        }
+
+        com.star4droid.mc.animation.ui.inspector.NumericKeypadDialog(
+            title = "Set Position ${labels[targetIdx]}",
+            initialValue = initialVal,
+            onDismiss = { activeKeypadAxis = null },
+            onConfirm = { newVal ->
+                val updated = when (targetIdx) {
+                    0 -> currentPos.copy(x = newVal)
+                    1 -> currentPos.copy(y = newVal)
+                    else -> currentPos.copy(z = newVal)
+                }
+                onUpdatePosition(updated)
+                activeKeypadAxis = null
+            }
+        )
+    }
 }
 
 // REQUIREMENT 9: Panel Resize Handle Component with Double-Tap Reset

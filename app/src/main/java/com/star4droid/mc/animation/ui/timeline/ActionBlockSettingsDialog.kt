@@ -35,7 +35,8 @@ fun ActionBlockSettingsDialog(
     onDismiss: () -> Unit,
     onApplyToThis: (ActionBlock) -> Unit,
     onApplyToAll: (ActionBlock) -> Unit,
-    onRemoveCustom: (String) -> Unit
+    onRemoveCustom: (String) -> Unit,
+    onStartPicker: ((String, Vec3) -> Unit)? = null
 ) {
     val context = LocalContext.current
     var duration by remember { mutableStateOf(block.duration) }
@@ -241,7 +242,24 @@ fun ActionBlockSettingsDialog(
                     }
 
                     ActionBlockType.SLIDE_TO_POS, ActionBlockType.MOVE_TO_POS -> {
-                        Text("Target Position Offset:", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFE2E8F0))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Target Position Offset:", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFE2E8F0))
+                            if (onStartPicker != null) {
+                                IconButton(
+                                    onClick = {
+                                        onStartPicker(block.id, Vec3(vecX, vecY, vecZ))
+                                        onDismiss()
+                                    },
+                                    modifier = Modifier.size(24.dp)
+                                ) {
+                                    Icon(Icons.Default.LocationOn, contentDescription = "Pick Position in 3D", tint = Color(0xFF38BDF8))
+                                }
+                            }
+                        }
                         Spacer(modifier = Modifier.height(6.dp))
                         Row(
                             modifier = Modifier.fillMaxWidth(),

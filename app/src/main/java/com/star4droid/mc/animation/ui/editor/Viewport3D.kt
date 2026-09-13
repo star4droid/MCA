@@ -85,6 +85,7 @@ class EditorGLSurfaceView(
     private var hasMoved = false
     private var wasMultiTouch = false
     private var isDraggingGizmo = false
+    private var isDraggingPickerGizmo = false
     private var activePointerId: Int = MotionEvent.INVALID_POINTER_ID
     private var isScaling = false
     private var skipNextDrag = false
@@ -116,6 +117,9 @@ class EditorGLSurfaceView(
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
+        val uiState = viewModel.uiState.value
+        renderer.pickerPosition = if (uiState.isPositionPickerActive) uiState.pickerPickedPosition else null
+
         scaleDetector.onTouchEvent(event)
         if (scaleDetector.isInProgress || isScaling) {
             skipNextDrag = true
@@ -143,8 +147,18 @@ class EditorGLSurfaceView(
                     invViewProj = renderer.invViewProjMatrix
                 )
 
+                if (uiState.isPositionPickerActive) {
+                    val pickerPos = uiState.pickerPickedPosition
+                    val axis = gizmoController.checkAxisHit(ray, pickerPos)
+                    if (axis != GizmoAxis.NONE) {
+                        gizmoController.startPickerDrag(pickerPos, axis, ray)
+                        isDraggingPickerGizmo = true
+                        return true
+                    }
+                }
+
                 val selectedNode = renderer.selectedNodeId?.let { sceneGraph.getNode(it) }
-                if (selectedNode != null && gizmoController.currentMode != EditorMode.SELECT && !camera.isUsingSceneCamera && !viewModel.uiState.value.isWorldBuildingMode) {
+                if (selectedNode != null && gizmoController.currentMode != EditorMode.SELECT && !camera.isUsingSceneCamera && !uiState.isWorldBuildingMode) {
                     val axis = gizmoController.checkAxisHit(ray, selectedNode.getWorldPosition())
                     if (axis != GizmoAxis.NONE) {
                         gizmoController.startDrag(selectedNode, axis, ray)
@@ -206,7 +220,19 @@ class EditorGLSurfaceView(
                 previousX = currentX
                 previousY = currentY
 
-                if (isDraggingGizmo) {
+                if (isDraggingPickerGizmo) {
+                    val ray = Ray.fromScreen(
+                        screenX = currentX,
+                        screenY = currentY,
+                        viewportWidth = renderer.viewportWidth.toFloat(),
+                        viewportHeight = renderer.viewportHeight.toFloat(),
+                        invViewProj = renderer.invViewProjMatrix
+                    )
+                    val updatedPos = gizmoController.updatePickerDrag(ray)
+                    if (updatedPos != null) {
+                        viewModel.updatePickedPosition(updatedPos)
+                    }
+                } else if (isDraggingGizmo) {
                     val ray = Ray.fromScreen(
                         screenX = currentX,
                         screenY = currentY,
@@ -240,7 +266,10 @@ class EditorGLSurfaceView(
                 activePointerId = MotionEvent.INVALID_POINTER_ID
                 skipNextDrag = false
 
-                if (isDraggingGizmo) {
+                if (isDraggingPickerGizmo) {
+                    gizmoController.endPickerDrag()
+                    isDraggingPickerGizmo = false
+                } else if (isDraggingGizmo) {
                     val selectedNode = renderer.selectedNodeId?.let { sceneGraph.getNode(it) }
                     if (selectedNode != null) {
                         gizmoController.endDrag(selectedNode)

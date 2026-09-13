@@ -55,6 +55,7 @@ class SceneRenderer(
     private val projMatrix = FloatArray(16)
     private val viewProjMatrix = FloatArray(16)
     val invViewProjMatrix = Mat4()
+    var pickerPosition: Vec3? = null
 
     private var planeMesh: Mesh? = null
 
@@ -195,10 +196,16 @@ class SceneRenderer(
             renderSceneNode(s, cube, node, viewProjMatrix, isSelected)
         }
 
-        // 5. Render Transform Gizmo for selected object (Skip if exporting video)
-        val selectedNode = selectedNodeId?.let { sceneGraph.getNode(it) }
-        if (!isExportRendering && selectedNode != null && gizmoController.currentMode != EditorMode.SELECT && !camera.isUsingSceneCamera) {
-            renderGizmo(s, cube, selectedNode.getWorldPosition(), viewProjMatrix)
+        // 5. Render Transform Gizmo for selected object or position picker (Skip if exporting video)
+        if (!isExportRendering && !camera.isUsingSceneCamera) {
+            if (pickerPosition != null) {
+                renderGizmo(s, cube, pickerPosition!!, viewProjMatrix)
+            } else {
+                val selectedNode = selectedNodeId?.let { sceneGraph.getNode(it) }
+                if (selectedNode != null && gizmoController.currentMode != EditorMode.SELECT) {
+                    renderGizmo(s, cube, selectedNode.getWorldPosition(), viewProjMatrix)
+                }
+            }
         }
     }
 

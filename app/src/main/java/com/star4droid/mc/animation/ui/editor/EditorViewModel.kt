@@ -96,6 +96,10 @@ data class EditorUiState(
     val scenes: List<SceneItem> = listOf(SceneItem(name = "Main Scene")),
     val activeSceneId: String = "",
     val timeOfDay: TimeOfDay = TimeOfDay.NOON,
+    val isPositionPickerActive: Boolean = false,
+    val pickerTargetBlockId: String? = null,
+    val pickerPickedPosition: Vec3 = Vec3.ZERO,
+    val prePickerSelectionLocked: Boolean = false,
     val saveMessage: String? = null,
     val version: Long = 0L // Incremented to trigger Compose recomposition
 )
@@ -646,6 +650,43 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
 
     fun exitWorldBuildingMode() {
         _uiState.value = _uiState.value.copy(isWorldBuildingMode = false)
+    }
+
+    // --- Position Picker ---
+    fun startPositionPicker(blockId: String, initialPos: Vec3) {
+        val currentLocked = _uiState.value.isSelectionLocked
+        _uiState.value = _uiState.value.copy(
+            isPositionPickerActive = true,
+            pickerTargetBlockId = blockId,
+            pickerPickedPosition = initialPos,
+            prePickerSelectionLocked = currentLocked,
+            isSelectionLocked = true,
+            editorMode = EditorMode.MOVE
+        )
+    }
+
+    fun updatePickedPosition(pos: Vec3) {
+        _uiState.value = _uiState.value.copy(pickerPickedPosition = pos)
+    }
+
+    fun confirmPickedPosition(onConfirmed: (Vec3) -> Unit) {
+        val pickedPos = _uiState.value.pickerPickedPosition
+        val restoreLocked = _uiState.value.prePickerSelectionLocked
+        _uiState.value = _uiState.value.copy(
+            isPositionPickerActive = false,
+            pickerTargetBlockId = null,
+            isSelectionLocked = restoreLocked
+        )
+        onConfirmed(pickedPos)
+    }
+
+    fun cancelPositionPicker() {
+        val restoreLocked = _uiState.value.prePickerSelectionLocked
+        _uiState.value = _uiState.value.copy(
+            isPositionPickerActive = false,
+            pickerTargetBlockId = null,
+            isSelectionLocked = restoreLocked
+        )
     }
 
     fun setWorldBuildingTool(tool: WorldBuildingTool) {
