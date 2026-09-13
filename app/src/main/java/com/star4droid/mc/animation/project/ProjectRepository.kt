@@ -126,6 +126,13 @@ class ProjectRepository(private val context: Context) {
         val legacyInt = File(context.filesDir, "projects")
         if (legacyInt.exists()) scanDir(legacyInt)
 
+        if (list.none { it.id == "sample_village_city" }) {
+            createSampleVillageProject()
+            list.clear()
+            seenIds.clear()
+            scanDir(externalBaseDir)
+        }
+
         return list.sortedByDescending { it.updatedAt }
     }
 
@@ -213,6 +220,386 @@ class ProjectRepository(private val context: Context) {
                 position = Vec3(0f, 0f, 0f)
             )
         }
+
+        val metadata = ProjectMetadata(
+            id = id,
+            name = name,
+            createdAt = System.currentTimeMillis(),
+            updatedAt = System.currentTimeMillis(),
+            nodeCount = sceneGraph.nodes.size,
+            timelineCount = timelines.size
+        )
+
+        saveProject(id, metadata, sceneGraph, timelines, instances)
+        return id
+    }
+
+    fun createSampleVillageProject(): String {
+        val name = "Sample Village City"
+        val id = "sample_village_city"
+        val projectDir = getProjectDir(id, name)
+        ensureProjectSubdirs(projectDir)
+
+        val sceneGraph = SceneGraph()
+        val timelines = mutableListOf<TimelineAsset>()
+        val instances = mutableListOf<TimelineInstance>()
+
+        // 1. Main Camera
+        val cameraNode = SceneNode(
+            id = "cam_main",
+            name = "Camera Main",
+            type = SceneNodeType.CAMERA,
+            baseTransform = Transform(
+                position = Vec3(0f, 14f, 18f),
+                rotation = Vec3(-28f, 0f, 0f)
+            ),
+            animatedTransform = Transform(
+                position = Vec3(0f, 14f, 18f),
+                rotation = Vec3(-28f, 0f, 0f)
+            ),
+            cameraData = CameraData(fov = 60f, near = 0.1f, far = 1000f, enabled = true)
+        )
+        sceneGraph.addNode(cameraNode)
+
+        // 2. Sun Light
+        val sunNode = SceneNode(
+            id = "sun_light",
+            name = "Sun Light",
+            type = SceneNodeType.LIGHT,
+            baseTransform = Transform(
+                position = Vec3(10f, 20f, 10f),
+                rotation = Vec3(45f, 30f, 0f)
+            ),
+            animatedTransform = Transform(
+                position = Vec3(10f, 20f, 10f),
+                rotation = Vec3(45f, 30f, 0f)
+            ),
+            lightData = LightData(
+                color = 0xFFFFF8E7.toInt(),
+                intensity = 1.3f,
+                timeOfDay = TimeOfDay.NOON
+            )
+        )
+        sceneGraph.addNode(sunNode)
+
+        // 3. Ground Platform (Grass 60x60)
+        val groundNode = SceneNode(
+            id = "ground_main",
+            name = "Village Ground",
+            type = SceneNodeType.GROUND,
+            baseTransform = Transform(
+                position = Vec3(0f, -0.5f, 0f),
+                scale = Vec3(60f, 1f, 60f)
+            ),
+            animatedTransform = Transform(
+                position = Vec3(0f, -0.5f, 0f),
+                scale = Vec3(60f, 1f, 60f)
+            ),
+            material = Material(textureAssetId = "grass"),
+            boxDimensions = Vec3(1f, 1f, 1f)
+        )
+        sceneGraph.addNode(groundNode)
+
+        // 4. Cobblestone Main Roads & Cross Avenue
+        val mainRoad = SceneNode(
+            id = "road_main",
+            name = "Main Cobblestone Avenue",
+            type = SceneNodeType.BLOCK,
+            baseTransform = Transform(position = Vec3(0f, 0.01f, 0f), scale = Vec3(4f, 0.1f, 40f)),
+            animatedTransform = Transform(position = Vec3(0f, 0.01f, 0f), scale = Vec3(4f, 0.1f, 40f)),
+            material = Material(textureAssetId = "cobblestone")
+        )
+        sceneGraph.addNode(mainRoad)
+
+        val crossRoad = SceneNode(
+            id = "road_cross",
+            name = "Cross Village Street",
+            type = SceneNodeType.BLOCK,
+            baseTransform = Transform(position = Vec3(0f, 0.01f, 0f), scale = Vec3(40f, 0.1f, 4f)),
+            animatedTransform = Transform(position = Vec3(0f, 0.01f, 0f), scale = Vec3(40f, 0.1f, 4f)),
+            material = Material(textureAssetId = "cobblestone")
+        )
+        sceneGraph.addNode(crossRoad)
+
+        // 5. Central Village Square Fountain
+        val fountainBase = SceneNode(
+            id = "fountain_base",
+            name = "Village Fountain Basin",
+            type = SceneNodeType.STEP_BLOCK,
+            baseTransform = Transform(position = Vec3(0f, 0.25f, 0f), scale = Vec3(3f, 0.5f, 3f)),
+            animatedTransform = Transform(position = Vec3(0f, 0.25f, 0f), scale = Vec3(3f, 0.5f, 3f)),
+            material = Material(textureAssetId = "stone")
+        )
+        sceneGraph.addNode(fountainBase)
+
+        // 6. Castle & Fortress (North z = 12..20)
+        val castleGateW = SceneNode(
+            id = "castle_gate_w",
+            name = "Castle Gate Tower West",
+            type = SceneNodeType.BLOCK,
+            baseTransform = Transform(position = Vec3(-4f, 3.5f, 12f), scale = Vec3(3f, 7f, 3f)),
+            animatedTransform = Transform(position = Vec3(-4f, 3.5f, 12f), scale = Vec3(3f, 7f, 3f)),
+            material = Material(textureAssetId = "stone")
+        )
+        sceneGraph.addNode(castleGateW)
+
+        val castleGateE = SceneNode(
+            id = "castle_gate_e",
+            name = "Castle Gate Tower East",
+            type = SceneNodeType.BLOCK,
+            baseTransform = Transform(position = Vec3(4f, 3.5f, 12f), scale = Vec3(3f, 7f, 3f)),
+            animatedTransform = Transform(position = Vec3(4f, 3.5f, 12f), scale = Vec3(3f, 7f, 3f)),
+            material = Material(textureAssetId = "stone")
+        )
+        sceneGraph.addNode(castleGateE)
+
+        val castleArch = SceneNode(
+            id = "castle_gate_arch",
+            name = "Castle Gate Archway",
+            type = SceneNodeType.HALF_BLOCK,
+            baseTransform = Transform(position = Vec3(0f, 5.5f, 12f), scale = Vec3(5f, 1f, 3f)),
+            animatedTransform = Transform(position = Vec3(0f, 5.5f, 12f), scale = Vec3(5f, 1f, 3f)),
+            material = Material(textureAssetId = "stone")
+        )
+        sceneGraph.addNode(castleArch)
+
+        val castleWallW = SceneNode(
+            id = "castle_wall_w",
+            name = "Castle West Wall",
+            type = SceneNodeType.BLOCK,
+            baseTransform = Transform(position = Vec3(-12f, 2.5f, 12f), scale = Vec3(13f, 5f, 2f)),
+            animatedTransform = Transform(position = Vec3(-12f, 2.5f, 12f), scale = Vec3(13f, 5f, 2f)),
+            material = Material(textureAssetId = "stone")
+        )
+        sceneGraph.addNode(castleWallW)
+
+        val castleWallE = SceneNode(
+            id = "castle_wall_e",
+            name = "Castle East Wall",
+            type = SceneNodeType.BLOCK,
+            baseTransform = Transform(position = Vec3(12f, 2.5f, 12f), scale = Vec3(13f, 5f, 2f)),
+            animatedTransform = Transform(position = Vec3(12f, 2.5f, 12f), scale = Vec3(13f, 5f, 2f)),
+            material = Material(textureAssetId = "stone")
+        )
+        sceneGraph.addNode(castleWallE)
+
+        val watchtowerNW = SceneNode(
+            id = "watchtower_nw",
+            name = "Watchtower High Keep",
+            type = SceneNodeType.BLOCK,
+            baseTransform = Transform(position = Vec3(-15f, 5.0f, 18f), scale = Vec3(4f, 10f, 4f)),
+            animatedTransform = Transform(position = Vec3(-15f, 5.0f, 18f), scale = Vec3(4f, 10f, 4f)),
+            material = Material(textureAssetId = "stone")
+        )
+        sceneGraph.addNode(watchtowerNW)
+
+        val battlement1 = SceneNode(
+            id = "battlement_nw_1",
+            name = "Watchtower Stair Battlement",
+            type = SceneNodeType.STEP_BLOCK,
+            baseTransform = Transform(position = Vec3(-15f, 10.25f, 16.2f), scale = Vec3(4f, 1f, 0.6f)),
+            animatedTransform = Transform(position = Vec3(-15f, 10.25f, 16.2f), scale = Vec3(4f, 1f, 0.6f)),
+            material = Material(textureAssetId = "cobblestone")
+        )
+        sceneGraph.addNode(battlement1)
+
+        // 7. Village Houses
+        val townHallBody = SceneNode(
+            id = "town_hall_body",
+            name = "Brick Town Hall",
+            type = SceneNodeType.BLOCK,
+            baseTransform = Transform(position = Vec3(-12f, 2.0f, -10f), scale = Vec3(6f, 4f, 6f)),
+            animatedTransform = Transform(position = Vec3(-12f, 2.0f, -10f), scale = Vec3(6f, 4f, 6f)),
+            material = Material(textureAssetId = "brick")
+        )
+        sceneGraph.addNode(townHallBody)
+
+        val townHallRoof = SceneNode(
+            id = "town_hall_roof",
+            name = "Town Hall Stair Roof",
+            type = SceneNodeType.STEP_BLOCK,
+            baseTransform = Transform(position = Vec3(-12f, 4.25f, -10f), scale = Vec3(6.4f, 0.8f, 6.4f)),
+            animatedTransform = Transform(position = Vec3(-12f, 4.25f, -10f), scale = Vec3(6.4f, 0.8f, 6.4f)),
+            material = Material(textureAssetId = "oak_planks")
+        )
+        sceneGraph.addNode(townHallRoof)
+
+        val townHallPorch = SceneNode(
+            id = "town_hall_porch",
+            name = "Town Hall Slab Porch",
+            type = SceneNodeType.HALF_BLOCK,
+            baseTransform = Transform(position = Vec3(-12f, 0.25f, -6.6f), scale = Vec3(3f, 0.5f, 1.2f)),
+            animatedTransform = Transform(position = Vec3(-12f, 0.25f, -6.6f), scale = Vec3(3f, 0.5f, 1.2f)),
+            material = Material(textureAssetId = "stone")
+        )
+        sceneGraph.addNode(townHallPorch)
+
+        val tavernBody = SceneNode(
+            id = "tavern_body",
+            name = "Oak Tavern",
+            type = SceneNodeType.BLOCK,
+            baseTransform = Transform(position = Vec3(12f, 2.0f, -10f), scale = Vec3(6f, 4f, 6f)),
+            animatedTransform = Transform(position = Vec3(12f, 2.0f, -10f), scale = Vec3(6f, 4f, 6f)),
+            material = Material(textureAssetId = "oak_planks")
+        )
+        sceneGraph.addNode(tavernBody)
+
+        val tavernRoof = SceneNode(
+            id = "tavern_roof",
+            name = "Tavern Stair Roof",
+            type = SceneNodeType.STEP_BLOCK,
+            baseTransform = Transform(position = Vec3(12f, 4.25f, -10f), scale = Vec3(6.4f, 0.8f, 6.4f)),
+            animatedTransform = Transform(position = Vec3(12f, 4.25f, -10f), scale = Vec3(6.4f, 0.8f, 6.4f)),
+            material = Material(textureAssetId = "brick")
+        )
+        sceneGraph.addNode(tavernRoof)
+
+        val marketTable = SceneNode(
+            id = "market_table",
+            name = "Market Slab Stall",
+            type = SceneNodeType.HALF_BLOCK,
+            baseTransform = Transform(position = Vec3(10f, 0.25f, 6f), scale = Vec3(4f, 0.5f, 2f)),
+            animatedTransform = Transform(position = Vec3(10f, 0.25f, 6f), scale = Vec3(4f, 0.5f, 2f)),
+            material = Material(textureAssetId = "oak_planks")
+        )
+        sceneGraph.addNode(marketTable)
+
+        // 8. Lamp Posts (6 Lights)
+        val lampPositions = listOf(
+            Vec3(-2.5f, 2.5f, -8f), Vec3(2.5f, 2.5f, -8f),
+            Vec3(-2.5f, 2.5f, 0f), Vec3(2.5f, 2.5f, 0f),
+            Vec3(-2.5f, 2.5f, 8f), Vec3(2.5f, 2.5f, 8f)
+        )
+        lampPositions.forEachIndexed { index, pos ->
+            val lampPost = SceneNode(
+                id = "lamp_post_$index",
+                name = "Lamp Post ${index + 1}",
+                type = SceneNodeType.BLOCK,
+                baseTransform = Transform(position = Vec3(pos.x, 1f, pos.z), scale = Vec3(0.3f, 2f, 0.3f)),
+                animatedTransform = Transform(position = Vec3(pos.x, 1f, pos.z), scale = Vec3(0.3f, 2f, 0.3f)),
+                material = Material(textureAssetId = "obsidian")
+            )
+            sceneGraph.addNode(lampPost)
+
+            val lightNode = SceneNode(
+                id = "lamp_light_$index",
+                name = "Lamp Light ${index + 1}",
+                type = SceneNodeType.LIGHT,
+                baseTransform = Transform(position = pos),
+                animatedTransform = Transform(position = pos),
+                lightData = LightData(color = -40485, intensity = 2.0f, range = 12f)
+            )
+            sceneGraph.addNode(lightNode)
+        }
+
+        // 9. Character Rigs (STEVE & ALEX ONLY)
+        val steve1Root = CharacterFactory.addCharacterToScene(
+            sceneGraph = sceneGraph,
+            name = "Steve Traveler",
+            isAlex = false,
+            skinId = "steve",
+            position = Vec3(0f, 0f, -15f)
+        )
+
+        val alex1Root = CharacterFactory.addCharacterToScene(
+            sceneGraph = sceneGraph,
+            name = "Alex Traveler",
+            isAlex = true,
+            skinId = "alex",
+            position = Vec3(8f, 0f, -6f)
+        )
+
+        val steveGuardRoot = CharacterFactory.addCharacterToScene(
+            sceneGraph = sceneGraph,
+            name = "Steve Tower Guard",
+            isAlex = false,
+            skinId = "steve",
+            position = Vec3(-15f, 10f, 18f)
+        )
+
+        val alexGuardRoot = CharacterFactory.addCharacterToScene(
+            sceneGraph = sceneGraph,
+            name = "Alex Gatekeeper",
+            isAlex = true,
+            skinId = "alex",
+            position = Vec3(0f, 0f, 10f)
+        )
+
+        val steveTavernRoot = CharacterFactory.addCharacterToScene(
+            sceneGraph = sceneGraph,
+            name = "Steve Tavern Host",
+            isAlex = false,
+            skinId = "steve",
+            position = Vec3(12f, 0.5f, -6.5f)
+        )
+
+        val alexPatrolRoot = CharacterFactory.addCharacterToScene(
+            sceneGraph = sceneGraph,
+            name = "Alex Castle Patrol",
+            isAlex = true,
+            skinId = "alex",
+            position = Vec3(-10f, 5f, 12f)
+        )
+
+        // 10. Main 30-Second Timeline & Keyframes
+        val mainTimeline = TimelineAsset(
+            id = "timeline_main",
+            name = "Main Timeline",
+            duration = 30.0f
+        )
+
+        mainTimeline.actionBlocks.add(ActionBlock(id = "st1_w", type = ActionBlockType.WALK, targetNodeId = steve1Root, startTime = 0f, duration = 8f, speed = 1f, isDeltaBased = true))
+        mainTimeline.actionBlocks.add(ActionBlock(id = "al1_w", type = ActionBlockType.WALK, targetNodeId = alex1Root, startTime = 2f, duration = 6f, speed = 1f, isDeltaBased = true))
+        mainTimeline.actionBlocks.add(ActionBlock(id = "st1_wave", type = ActionBlockType.WAVE, targetNodeId = steve1Root, startTime = 8.5f, duration = 4f, speed = 1f))
+        mainTimeline.actionBlocks.add(ActionBlock(id = "al1_wave", type = ActionBlockType.WAVE, targetNodeId = alex1Root, startTime = 8.5f, duration = 4f, speed = 1f))
+
+        mainTimeline.actionBlocks.add(ActionBlock(id = "st_g_look", type = ActionBlockType.LOOK_LEFT, targetNodeId = steveGuardRoot, startTime = 12f, duration = 6f, speed = 1f))
+        mainTimeline.actionBlocks.add(ActionBlock(id = "al_g_taunt", type = ActionBlockType.TAUNT, targetNodeId = alexGuardRoot, startTime = 12f, duration = 4f, speed = 1f))
+        mainTimeline.actionBlocks.add(ActionBlock(id = "st_t_cheer", type = ActionBlockType.CHEER, targetNodeId = steveTavernRoot, startTime = 6f, duration = 6f, speed = 1f))
+        mainTimeline.actionBlocks.add(ActionBlock(id = "al_p_walk", type = ActionBlockType.WALK, targetNodeId = alexPatrolRoot, startTime = 14f, duration = 8f, speed = 1f, isDeltaBased = true))
+
+        val camPosX = mainTimeline.getOrCreateTrack("cam_main", "transform.position.x")
+        camPosX.addOrUpdateKeyframe(0f, -20f, Interpolation.SMOOTH)
+        camPosX.addOrUpdateKeyframe(6f, -4f, Interpolation.SMOOTH)
+        camPosX.addOrUpdateKeyframe(12f, 0f, Interpolation.SMOOTH)
+        camPosX.addOrUpdateKeyframe(18f, -10f, Interpolation.SMOOTH)
+        camPosX.addOrUpdateKeyframe(24f, 8f, Interpolation.SMOOTH)
+        camPosX.addOrUpdateKeyframe(30f, 0f, Interpolation.SMOOTH)
+
+        val camPosY = mainTimeline.getOrCreateTrack("cam_main", "transform.position.y")
+        camPosY.addOrUpdateKeyframe(0f, 16f, Interpolation.SMOOTH)
+        camPosY.addOrUpdateKeyframe(6f, 3.5f, Interpolation.SMOOTH)
+        camPosY.addOrUpdateKeyframe(12f, 2.2f, Interpolation.SMOOTH)
+        camPosY.addOrUpdateKeyframe(18f, 8.0f, Interpolation.SMOOTH)
+        camPosY.addOrUpdateKeyframe(24f, 3.5f, Interpolation.SMOOTH)
+        camPosY.addOrUpdateKeyframe(30f, 18f, Interpolation.SMOOTH)
+
+        val camPosZ = mainTimeline.getOrCreateTrack("cam_main", "transform.position.z")
+        camPosZ.addOrUpdateKeyframe(0f, 25f, Interpolation.SMOOTH)
+        camPosZ.addOrUpdateKeyframe(6f, 10f, Interpolation.SMOOTH)
+        camPosZ.addOrUpdateKeyframe(12f, 4.0f, Interpolation.SMOOTH)
+        camPosZ.addOrUpdateKeyframe(18f, 14f, Interpolation.SMOOTH)
+        camPosZ.addOrUpdateKeyframe(24f, 4f, Interpolation.SMOOTH)
+        camPosZ.addOrUpdateKeyframe(30f, 26f, Interpolation.SMOOTH)
+
+        val camRotX = mainTimeline.getOrCreateTrack("cam_main", "transform.rotation.x")
+        camRotX.addOrUpdateKeyframe(0f, -28f, Interpolation.SMOOTH)
+        camRotX.addOrUpdateKeyframe(6f, -12f, Interpolation.SMOOTH)
+        camRotX.addOrUpdateKeyframe(12f, -5f, Interpolation.SMOOTH)
+        camRotX.addOrUpdateKeyframe(18f, 18f, Interpolation.SMOOTH)
+        camRotX.addOrUpdateKeyframe(24f, -10f, Interpolation.SMOOTH)
+        camRotX.addOrUpdateKeyframe(30f, -32f, Interpolation.SMOOTH)
+
+        val camRotY = mainTimeline.getOrCreateTrack("cam_main", "transform.rotation.y")
+        camRotY.addOrUpdateKeyframe(0f, -35f, Interpolation.SMOOTH)
+        camRotY.addOrUpdateKeyframe(6f, -18f, Interpolation.SMOOTH)
+        camRotY.addOrUpdateKeyframe(12f, 0f, Interpolation.SMOOTH)
+        camRotY.addOrUpdateKeyframe(18f, -40f, Interpolation.SMOOTH)
+        camRotY.addOrUpdateKeyframe(24f, 50f, Interpolation.SMOOTH)
+        camRotY.addOrUpdateKeyframe(30f, 0f, Interpolation.SMOOTH)
+
+        timelines.add(mainTimeline)
+        instances.add(TimelineInstance(timelineAssetId = mainTimeline.id))
 
         val metadata = ProjectMetadata(
             id = id,
@@ -552,28 +939,34 @@ class ProjectRepository(private val context: Context) {
         put("pivX", t.pivot.x.toDouble()); put("pivY", t.pivot.y.toDouble()); put("pivZ", t.pivot.z.toDouble())
     }
 
-    private fun deserializeTransform(obj: JSONObject): Transform = Transform(
-        position = Vec3(
-            obj.optDouble("px", 0.0).toFloat(),
-            obj.optDouble("py", 0.0).toFloat(),
-            obj.optDouble("pz", 0.0).toFloat()
-        ),
-        rotation = Vec3(
-            obj.optDouble("rx", 0.0).toFloat(),
-            obj.optDouble("ry", 0.0).toFloat(),
-            obj.optDouble("rz", 0.0).toFloat()
-        ),
-        scale = Vec3(
-            obj.optDouble("sx", 1.0).toFloat(),
-            obj.optDouble("sy", 1.0).toFloat(),
-            obj.optDouble("sz", 1.0).toFloat()
-        ),
-        pivot = Vec3(
-            obj.optDouble("pivX", 0.0).toFloat(),
-            obj.optDouble("pivY", 0.0).toFloat(),
-            obj.optDouble("pivZ", 0.0).toFloat()
+    private fun deserializeTransform(obj: JSONObject): Transform {
+        val posObj = obj.optJSONObject("position")
+        val px = if (posObj != null) posObj.optDouble("x", 0.0).toFloat() else obj.optDouble("px", 0.0).toFloat()
+        val py = if (posObj != null) posObj.optDouble("y", 0.0).toFloat() else obj.optDouble("py", 0.0).toFloat()
+        val pz = if (posObj != null) posObj.optDouble("z", 0.0).toFloat() else obj.optDouble("pz", 0.0).toFloat()
+
+        val rotObj = obj.optJSONObject("rotation")
+        val rx = if (rotObj != null) rotObj.optDouble("x", 0.0).toFloat() else obj.optDouble("rx", 0.0).toFloat()
+        val ry = if (rotObj != null) rotObj.optDouble("y", 0.0).toFloat() else obj.optDouble("ry", 0.0).toFloat()
+        val rz = if (rotObj != null) rotObj.optDouble("z", 0.0).toFloat() else obj.optDouble("rz", 0.0).toFloat()
+
+        val scaleObj = obj.optJSONObject("scale")
+        val sx = if (scaleObj != null) scaleObj.optDouble("x", 1.0).toFloat() else obj.optDouble("sx", 1.0).toFloat()
+        val sy = if (scaleObj != null) scaleObj.optDouble("y", 1.0).toFloat() else obj.optDouble("sy", 1.0).toFloat()
+        val sz = if (scaleObj != null) scaleObj.optDouble("z", 1.0).toFloat() else obj.optDouble("sz", 1.0).toFloat()
+
+        val pivObj = obj.optJSONObject("pivot")
+        val pivX = if (pivObj != null) pivObj.optDouble("x", 0.0).toFloat() else obj.optDouble("pivX", 0.0).toFloat()
+        val pivY = if (pivObj != null) pivObj.optDouble("y", 0.0).toFloat() else obj.optDouble("pivY", 0.0).toFloat()
+        val pivZ = if (pivObj != null) pivObj.optDouble("z", 0.0).toFloat() else obj.optDouble("pivZ", 0.0).toFloat()
+
+        return Transform(
+            position = Vec3(px, py, pz),
+            rotation = Vec3(rx, ry, rz),
+            scale = Vec3(sx, sy, sz),
+            pivot = Vec3(pivX, pivY, pivZ)
         )
-    )
+    }
 
     private fun serializeVec3(v: Vec3): JSONObject = JSONObject().apply {
         put("x", v.x.toDouble())
