@@ -35,7 +35,15 @@ enum class ActionBlockType(val displayName: String, val defaultDuration: Float) 
     SPIN_ATTACK("Spin Attack", 1.0f),
     BLOCK_SHIELD("Block Shield", 1.0f),
     TAUNT("Taunt", 1.2f),
-    DISABLE_CAMERA("Disable Camera", 0.1f)
+    CIRCLE_WALK("Circle Walk", 4.0f),
+    SLEEPY("Sleepy", 3.0f),
+    PATROL("Patrol", 6.0f),
+    SWORD_ATTACK("Sword Attack", 1.5f),
+    DISABLE_CAMERA("Disable Camera", 0.1f),
+    CONVERSATION("Conversation", 3.0f),
+    FARMING("Farming", 3.0f),
+    EATING("Eating", 2.5f),
+    LOOK_AROUND("Look Around", 2.5f)
 }
 
 data class ActionBlock(

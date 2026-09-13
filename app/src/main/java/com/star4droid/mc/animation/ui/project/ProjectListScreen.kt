@@ -3,6 +3,8 @@ package com.star4droid.mc.animation.ui.project
 import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -280,27 +282,38 @@ fun ProjectListScreen(
                     Text("Starting Template:", fontSize = 13.sp, color = Color(0xFF94A3B8))
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    Row(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
                         Button(
                             onClick = { selectedTemplate = "steve" },
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = if (selectedTemplate == "steve") Color(0xFF22C55E) else Color(0xFF1E293B)
                             ),
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.weight(1f)
+                            shape = RoundedCornerShape(8.dp)
                         ) {
                             Text("Steve Rig", fontSize = 12.sp)
                         }
-                        Spacer(modifier = Modifier.width(8.dp))
                         Button(
                             onClick = { selectedTemplate = "blank" },
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = if (selectedTemplate == "blank") Color(0xFF22C55E) else Color(0xFF1E293B)
                             ),
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.weight(1f)
+                            shape = RoundedCornerShape(8.dp)
                         ) {
                             Text("Empty Scene", fontSize = 12.sp)
+                        }
+                        Button(
+                            onClick = { selectedTemplate = "village" },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (selectedTemplate == "village") Color(0xFF22C55E) else Color(0xFF1E293B)
+                            ),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("Village Sample", fontSize = 12.sp)
                         }
                     }
                 }

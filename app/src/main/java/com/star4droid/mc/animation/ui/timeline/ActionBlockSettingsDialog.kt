@@ -40,6 +40,7 @@ fun ActionBlockSettingsDialog(
 ) {
     val context = LocalContext.current
     var duration by remember { mutableStateOf(block.duration) }
+    var angle by remember { mutableStateOf(block.angle) }
     var enablePositionMove by remember { mutableStateOf(block.enablePositionMove) }
     var stepSize by remember { mutableStateOf(block.stepSize) }
     var speed by remember { mutableStateOf(block.speed) }
@@ -361,27 +362,157 @@ fun ActionBlockSettingsDialog(
                         }
                     }
 
-                    ActionBlockType.LOOK_LEFT, ActionBlockType.LOOK_RIGHT -> {
-                        Text("Head Turn Amplitude: ${String.format("%.2f", stepSize)}x", fontSize = 12.sp, color = Color(0xFFE2E8F0))
+                    ActionBlockType.ROTATE -> {
+                        // Rotation Block: only Duration and Angle, no useless parameters!
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Rotation Angle: ${angle.toInt()}°",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFE879F9)
+                            )
+                            IconButton(
+                                onClick = { angle = 0f },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(Icons.Default.Refresh, contentDescription = "Reset Angle", tint = Color(0xFF94A3B8), modifier = Modifier.size(16.dp))
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        // Quick angle preset buttons
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            val anglePresets = listOf(-180f, -90f, -45f, 45f, 90f, 180f)
+                            anglePresets.forEach { preset ->
+                                val isSel = angle.toInt() == preset.toInt()
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(if (isSel) Color(0xFFE879F9) else Color(0xFF0F172A))
+                                        .border(1.dp, if (isSel) Color.White else Color(0xFF334155), RoundedCornerShape(6.dp))
+                                        .clickable { angle = preset }
+                                        .padding(vertical = 6.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "${preset.toInt()}°",
+                                        fontSize = 10.sp,
+                                        fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium,
+                                        color = if (isSel) Color.Black else Color.White
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Slider(
+                            value = angle,
+                            onValueChange = { angle = (Math.round(it / 5f) * 5f).coerceIn(-360f, 360f) },
+                            valueRange = -360f..360f,
+                            colors = SliderDefaults.colors(
+                                thumbColor = Color(0xFFE879F9),
+                                activeTrackColor = Color(0xFFC026D3)
+                            )
+                        )
+
+                        Text(
+                            text = "Turns the character smoothly while walking or standing. Works concurrently with Walk blocks.",
+                            fontSize = 11.sp,
+                            color = Color(0xFF94A3B8),
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
+
+                    ActionBlockType.CIRCLE_WALK -> {
+                        Text("Circle Radius: ${String.format("%.1f", stepSize * 2.5f)} blocks", fontSize = 12.sp, color = Color(0xFFE2E8F0))
                         Slider(
                             value = stepSize,
-                            onValueChange = { stepSize = (Math.round(it * 100f) / 100f).coerceIn(0.1f, 3.0f) },
-                            valueRange = 0.1f..3.0f,
+                            onValueChange = { stepSize = (Math.round(it * 10f) / 10f).coerceIn(0.4f, 3.0f) },
+                            valueRange = 0.4f..3.0f,
+                            colors = SliderDefaults.colors(thumbColor = Color(0xFF06B6D4), activeTrackColor = Color(0xFF0891B2))
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text("Walk Cadence Speed: ${String.format("%.2f", speed)}x", fontSize = 12.sp, color = Color(0xFFE2E8F0))
+                        Slider(
+                            value = speed,
+                            onValueChange = { speed = (Math.round(it * 100f) / 100f).coerceIn(0.4f, 3.0f) },
+                            valueRange = 0.4f..3.0f,
+                            colors = SliderDefaults.colors(thumbColor = Color(0xFFA855F7), activeTrackColor = Color(0xFF7C3AED))
+                        )
+                    }
+
+                    ActionBlockType.PATROL -> {
+                        Text("Patrol Step Range: ${String.format("%.1f", stepSize * 3f)} blocks", fontSize = 12.sp, color = Color(0xFFE2E8F0))
+                        Slider(
+                            value = stepSize,
+                            onValueChange = { stepSize = (Math.round(it * 10f) / 10f).coerceIn(0.5f, 3.0f) },
+                            valueRange = 0.5f..3.0f,
+                            colors = SliderDefaults.colors(thumbColor = Color(0xFF3B82F6), activeTrackColor = Color(0xFF1D4ED8))
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text("Patrol Speed: ${String.format("%.2f", speed)}x", fontSize = 12.sp, color = Color(0xFFE2E8F0))
+                        Slider(
+                            value = speed,
+                            onValueChange = { speed = (Math.round(it * 100f) / 100f).coerceIn(0.5f, 2.5f) },
+                            valueRange = 0.5f..2.5f,
+                            colors = SliderDefaults.colors(thumbColor = Color(0xFFA855F7), activeTrackColor = Color(0xFF7C3AED))
+                        )
+                    }
+
+                    ActionBlockType.LOOK_LEFT, ActionBlockType.LOOK_RIGHT,
+                    ActionBlockType.TILT_HEAD, ActionBlockType.NOD_HEAD, ActionBlockType.SHAKE_HEAD -> {
+                        Text("Head Angle: ${angle.toInt()}°", fontSize = 12.sp, color = Color(0xFFE2E8F0))
+                        Slider(
+                            value = angle,
+                            onValueChange = { angle = (Math.round(it / 5f) * 5f).coerceIn(10f, 90f) },
+                            valueRange = 10f..90f,
                             colors = SliderDefaults.colors(thumbColor = Color(0xFF38BDF8), activeTrackColor = Color(0xFF0284C7))
                         )
                     }
 
-                    else -> {
-                        Text("Action Motion Amplitude: ${String.format("%.2f", stepSize)}x", fontSize = 12.sp, color = Color(0xFFE2E8F0))
+                    ActionBlockType.WAVE, ActionBlockType.CLAP, ActionBlockType.CHEER,
+                    ActionBlockType.PUNCH, ActionBlockType.KICK, ActionBlockType.TAUNT,
+                    ActionBlockType.BACKFLIP, ActionBlockType.SWORD_ATTACK -> {
+                        // Gesture/Action: Only Speed needed, amplitude is fixed for natural animation
+                        Text("Action Playback Speed: ${String.format("%.2f", speed)}x", fontSize = 12.sp, color = Color(0xFFE2E8F0))
                         Slider(
-                            value = stepSize,
-                            onValueChange = { stepSize = (Math.round(it * 100f) / 100f).coerceIn(0.1f, 3.0f) },
-                            valueRange = 0.1f..3.0f,
-                            colors = SliderDefaults.colors(thumbColor = Color(0xFF38BDF8), activeTrackColor = Color(0xFF0284C7))
+                            value = speed,
+                            onValueChange = { speed = (Math.round(it * 100f) / 100f).coerceIn(0.2f, 4.0f) },
+                            valueRange = 0.2f..4.0f,
+                            colors = SliderDefaults.colors(thumbColor = Color(0xFFA855F7), activeTrackColor = Color(0xFF7C3AED))
                         )
+                    }
 
-                        Spacer(modifier = Modifier.height(6.dp))
+                    ActionBlockType.SLEEPY, ActionBlockType.SIT_DOWN, ActionBlockType.STAND_UP,
+                    ActionBlockType.BOW, ActionBlockType.CROSS_ARMS, ActionBlockType.SHRUG,
+                    ActionBlockType.DEATH_FALL, ActionBlockType.BLOCK_SHIELD, ActionBlockType.DISABLE_CAMERA,
+                    ActionBlockType.CONVERSATION, ActionBlockType.FARMING, ActionBlockType.EATING, ActionBlockType.LOOK_AROUND -> {
+                        // Pose / Static / Scripted Citizen actions: No useless parameters!
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = "Plays natural citizen animation for the duration configured above.",
+                                fontSize = 11.sp,
+                                color = Color(0xFF94A3B8),
+                                modifier = Modifier.padding(10.dp)
+                            )
+                        }
+                    }
 
+                    else -> {
                         Text("Action Playback Speed: ${String.format("%.2f", speed)}x", fontSize = 12.sp, color = Color(0xFFE2E8F0))
                         Slider(
                             value = speed,
@@ -395,11 +526,12 @@ fun ActionBlockSettingsDialog(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 val currentUpdatedBlock = remember(
-                    duration, enablePositionMove, stepSize, speed,
+                    duration, angle, enablePositionMove, stepSize, speed,
                     vecX, vecY, vecZ, targetScaleX, targetScaleY, targetScaleZ, clipFileName, customJsonState
                 ) {
                     block.copy(
                         duration = duration,
+                        angle = angle,
                         enablePositionMove = enablePositionMove,
                         stepSize = stepSize,
                         speed = speed,

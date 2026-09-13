@@ -98,8 +98,34 @@ class EditorGLSurfaceView(
         }
 
         override fun onScale(detector: ScaleGestureDetector): Boolean {
-            camera.zoom(1.0f / detector.scaleFactor)
-            return true
+            val uiState = viewModel.uiState.value
+            val activeCam = sceneGraph.getActiveCamera()
+            if (camera.isUsingSceneCamera) {
+                if (uiState.isCameraControlActive && activeCam != null) {
+                    val rot = activeCam.animatedTransform.rotation
+                    val radYaw = Math.toRadians(rot.y.toDouble())
+                    val radPitch = Math.toRadians(rot.x.toDouble())
+                    val fwdX = -Math.sin(radYaw).toFloat() * Math.cos(radPitch).toFloat()
+                    val fwdY = -Math.sin(radPitch).toFloat()
+                    val fwdZ = -Math.cos(radYaw).toFloat() * Math.cos(radPitch).toFloat()
+                    val fwd = Vec3(fwdX, fwdY, fwdZ).normalized()
+                    val zoomDelta = (detector.scaleFactor - 1.0f) * 4.0f
+                    val newPos = activeCam.animatedTransform.position + fwd * zoomDelta
+                    activeCam.animatedTransform = activeCam.animatedTransform.copy(position = newPos)
+                    activeCam.baseTransform = activeCam.baseTransform.copy(position = newPos)
+                    sceneGraph.updateWorldMatrices()
+                    onGizmoTransformChanged()
+                    return true
+                }
+                return false
+            } else {
+                val selectedNode = renderer.selectedNodeId?.let { sceneGraph.getNode(it) }
+                if (selectedNode != null) {
+                    camera.target = selectedNode.getWorldPosition()
+                }
+                camera.zoom(1.0f / detector.scaleFactor)
+                return true
+            }
         }
 
         override fun onScaleEnd(detector: ScaleGestureDetector) {
@@ -246,16 +272,45 @@ class EditorGLSurfaceView(
                         onGizmoTransformChanged()
                     }
                 } else if (event.pointerCount == 1 && !wasMultiTouch) {
-                    // Orbit Editor Camera - suppressed after pinch release to prevent rotation shift
                     if (abs(dx) < 100f && abs(dy) < 100f) {
-                        if (!camera.isUsingSceneCamera) {
+                        val activeCam = sceneGraph.getActiveCamera()
+                        if (camera.isUsingSceneCamera) {
+                            if (uiState.isCameraControlActive && activeCam != null) {
+                                val rot = activeCam.animatedTransform.rotation
+                                val newYaw = rot.y - dx * 0.35f
+                                val newPitch = (rot.x + dy * 0.35f).coerceIn(-85f, 85f)
+                                val newRot = Vec3(newPitch, newYaw, rot.z)
+                                activeCam.animatedTransform = activeCam.animatedTransform.copy(rotation = newRot)
+                                activeCam.baseTransform = activeCam.baseTransform.copy(rotation = newRot)
+                                sceneGraph.updateWorldMatrices()
+                                onGizmoTransformChanged()
+                            }
+                        } else {
+                            val selectedNode = renderer.selectedNodeId?.let { sceneGraph.getNode(it) }
+                            if (selectedNode != null) {
+                                camera.target = selectedNode.getWorldPosition()
+                            }
                             camera.orbit(dx * 0.35f, dy * 0.35f)
                         }
                     }
                 } else if (event.pointerCount == 2) {
-                    // Pan Editor Camera
+                    // Move using two fingers to pan camera
                     if (abs(dx) < 100f && abs(dy) < 100f) {
-                        if (!camera.isUsingSceneCamera) {
+                        val activeCam = sceneGraph.getActiveCamera()
+                        if (camera.isUsingSceneCamera) {
+                            if (uiState.isCameraControlActive && activeCam != null) {
+                                val rot = activeCam.animatedTransform.rotation
+                                val radYaw = Math.toRadians(rot.y.toDouble())
+                                val right = Vec3(Math.cos(radYaw).toFloat(), 0f, -Math.sin(radYaw).toFloat()).normalized()
+                                val up = Vec3(0f, 1f, 0f)
+                                val move = right * (-dx * 0.025f) + up * (dy * 0.025f)
+                                val newPos = activeCam.animatedTransform.position + move
+                                activeCam.animatedTransform = activeCam.animatedTransform.copy(position = newPos)
+                                activeCam.baseTransform = activeCam.baseTransform.copy(position = newPos)
+                                sceneGraph.updateWorldMatrices()
+                                onGizmoTransformChanged()
+                            }
+                        } else {
                             camera.pan(dx, dy)
                         }
                     }

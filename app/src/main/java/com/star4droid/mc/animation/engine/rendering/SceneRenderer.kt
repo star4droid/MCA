@@ -242,7 +242,7 @@ class SceneRenderer(
             SceneNodeType.BLOCK, SceneNodeType.HALF_BLOCK, SceneNodeType.STEP_BLOCK, SceneNodeType.CHARACTER_PART, SceneNodeType.GROUND, SceneNodeType.PLANE -> {
                 // Combine node world matrix with local box dimension scaling
                 val nodeMat = node.worldMatrix.values
-                val dimScale = Mat4.scaling(node.boxDimensions)
+                val dimScale = if (node.objModelData != null) Mat4.identity() else Mat4.scaling(node.boxDimensions)
                 val finalModel = Mat4(nodeMat) * dimScale
 
                 System.arraycopy(finalModel.values, 0, modelMatrix, 0, 16)

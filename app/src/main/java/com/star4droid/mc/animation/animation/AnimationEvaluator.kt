@@ -7,6 +7,7 @@ import com.star4droid.mc.animation.engine.scene.SceneNode
 import com.star4droid.mc.animation.engine.scene.SceneNodeType
 import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.cos
 import kotlin.math.sin
 
 object AnimationEvaluator {
@@ -61,10 +62,10 @@ object AnimationEvaluator {
                 if (localTime >= block.startTime && localTime <= endTime) {
                     val duration = if (block.duration <= 0.001f) 0.001f else block.duration
                     val progress = ((localTime - block.startTime) / duration).coerceIn(0f, 1f)
-                    applyActionBlock(sceneGraph, block, progress, isCompleted = false, runningTransforms = runningTransforms)
+                    applyActionBlock(sceneGraph, timeline, block, localTime, progress, isCompleted = false, runningTransforms = runningTransforms)
                 } else if (localTime > endTime) {
                     // Block has finished: maintain the end state without active limb swinging
-                    applyActionBlock(sceneGraph, block, 1f, isCompleted = true, runningTransforms = runningTransforms)
+                    applyActionBlock(sceneGraph, timeline, block, localTime, 1f, isCompleted = true, runningTransforms = runningTransforms)
                 }
             }
 
@@ -138,9 +139,78 @@ object AnimationEvaluator {
         return selectedNode.id
     }
 
+    private fun getCharacterYawAtTime(timeline: TimelineAsset, characterRootId: String, initialYaw: Float, time: Float): Float {
+        var yaw = initialYaw
+        for (b in timeline.actionBlocks) {
+            if (b.targetNodeId == characterRootId && b.type == ActionBlockType.ROTATE) {
+                val endTime = b.startTime + b.duration
+                if (time >= endTime) {
+                    yaw += b.angle
+                } else if (time > b.startTime) {
+                    val dur = if (b.duration <= 0.001f) 0.001f else b.duration
+                    val p = ((time - b.startTime) / dur).coerceIn(0f, 1f)
+                    val smooth = p * p * (3f - 2f * p)
+                    yaw += b.angle * smooth
+                }
+            }
+        }
+        return yaw
+    }
+
+    private fun computeIntegratedWalkDisplacement(
+        timeline: TimelineAsset,
+        characterRootId: String,
+        initialYaw: Float,
+        block: ActionBlock,
+        progress: Float
+    ): Vec3 {
+        if (!block.enablePositionMove) return Vec3.ZERO
+        if (block.targetPosition != Vec3.ZERO && block.startPosition != null && block.targetPosition != block.startPosition) {
+            return (block.targetPosition - block.startPosition!!) * progress
+        }
+        val rawMove = block.moveVector * block.stepSize
+        val totalTime = block.duration * progress
+        if (totalTime <= 0.0001f) return Vec3.ZERO
+
+        val hasRotations = timeline.actionBlocks.any {
+            it.targetNodeId == characterRootId && it.type == ActionBlockType.ROTATE &&
+            it.startTime < (block.startTime + block.duration) && (it.startTime + it.duration) > block.startTime
+        }
+
+        if (!hasRotations) {
+            val currentYaw = getCharacterYawAtTime(timeline, characterRootId, initialYaw, block.startTime)
+            val rad = Math.toRadians(currentYaw.toDouble())
+            val cosY = Math.cos(rad).toFloat()
+            val sinY = Math.sin(rad).toFloat()
+            val dx = rawMove.x * cosY + rawMove.z * sinY
+            val dz = -rawMove.x * sinY + rawMove.z * cosY
+            return Vec3(dx * progress, rawMove.y * progress, dz * progress)
+        }
+
+        val steps = 16
+        val dt = totalTime / steps
+        val fwdRate = rawMove / block.duration
+        var accX = 0f
+        var accZ = 0f
+        for (i in 0 until steps) {
+            val sampleTime = block.startTime + (i + 0.5f) * dt
+            val sampleYaw = getCharacterYawAtTime(timeline, characterRootId, initialYaw, sampleTime)
+            val rad = Math.toRadians(sampleYaw.toDouble())
+            val cosY = Math.cos(rad).toFloat()
+            val sinY = Math.sin(rad).toFloat()
+            val dx = (fwdRate.x * cosY + fwdRate.z * sinY) * dt
+            val dz = (-fwdRate.x * sinY + fwdRate.z * cosY) * dt
+            accX += dx
+            accZ += dz
+        }
+        return Vec3(accX, rawMove.y * progress, accZ)
+    }
+
     private fun applyActionBlock(
         sceneGraph: SceneGraph,
+        timeline: TimelineAsset,
         block: ActionBlock,
+        localTime: Float,
         progress: Float,
         isCompleted: Boolean = false,
         runningTransforms: MutableMap<String, com.star4droid.mc.animation.engine.scene.Transform>
@@ -155,7 +225,14 @@ object AnimationEvaluator {
                 if (block.targetPosition != Vec3.ZERO && block.startPosition != null && block.targetPosition != block.startPosition) {
                     block.targetPosition - block.startPosition!!
                 } else {
-                    block.moveVector * block.stepSize
+                    val rawDelta = block.moveVector * block.stepSize
+                    // Transform forward/strafe movement by character's facing yaw
+                    val rad = Math.toRadians(rootNode.baseTransform.rotation.y.toDouble())
+                    val cosY = Math.cos(rad).toFloat()
+                    val sinY = Math.sin(rad).toFloat()
+                    val dx = rawDelta.x * cosY + rawDelta.z * sinY
+                    val dz = -rawDelta.x * sinY + rawDelta.z * cosY
+                    Vec3(dx, rawDelta.y, dz)
                 }
             } else Vec3.ZERO
         }
@@ -198,13 +275,36 @@ object AnimationEvaluator {
         when (block.type) {
             ActionBlockType.WALK -> {
                 val baseT = runningTransforms.getOrPut(rootNode.id) { rootNode.baseTransform.copyTransform() }
-                val delta = moveDelta()
-                // Move in facing direction: use current yaw to transform moveVector
-                val currentPos = baseT.position + delta * progress
+                val integratedDelta = computeIntegratedWalkDisplacement(
+                    timeline = timeline,
+                    characterRootId = rootNode.id,
+                    initialYaw = baseT.rotation.y,
+                    block = block,
+                    progress = progress
+                )
+                val currentYaw = getCharacterYawAtTime(
+                    timeline = timeline,
+                    characterRootId = rootNode.id,
+                    initialYaw = baseT.rotation.y,
+                    time = if (isCompleted) block.startTime + block.duration else localTime
+                )
 
                 if (isCompleted) {
-                    rootNode.animatedTransform = rootNode.animatedTransform.copy(position = baseT.position + delta)
-                    runningTransforms[rootNode.id] = baseT.copy(position = baseT.position + delta)
+                    val finalDelta = computeIntegratedWalkDisplacement(
+                        timeline = timeline,
+                        characterRootId = rootNode.id,
+                        initialYaw = baseT.rotation.y,
+                        block = block,
+                        progress = 1f
+                    )
+                    rootNode.animatedTransform = rootNode.animatedTransform.copy(
+                        position = baseT.position + finalDelta,
+                        rotation = rootNode.animatedTransform.rotation.copy(y = currentYaw)
+                    )
+                    runningTransforms[rootNode.id] = baseT.copy(
+                        position = baseT.position + finalDelta,
+                        rotation = baseT.rotation.copy(y = currentYaw)
+                    )
                     resetLimbs()
                 } else {
                     val cycle = (progress * block.duration * (PI * 2.0 * 2.0 * block.speed)).toFloat()
@@ -213,7 +313,8 @@ object AnimationEvaluator {
                     val bob = abs(sin(cycle * 2f)) * 0.06f * block.stepSize
 
                     rootNode.animatedTransform = rootNode.animatedTransform.copy(
-                        position = Vec3(currentPos.x, currentPos.y + bob, currentPos.z)
+                        position = Vec3(baseT.position.x + integratedDelta.x, baseT.position.y + integratedDelta.y + bob, baseT.position.z + integratedDelta.z),
+                        rotation = rootNode.animatedTransform.rotation.copy(y = currentYaw)
                     )
 
                     parts[CharacterPartType.LEFT_LEG]?.let {
@@ -238,12 +339,36 @@ object AnimationEvaluator {
 
             ActionBlockType.RUN -> {
                 val baseT = runningTransforms.getOrPut(rootNode.id) { rootNode.baseTransform.copyTransform() }
-                val delta = moveDelta()
-                val currentPos = baseT.position + delta * progress
+                val integratedDelta = computeIntegratedWalkDisplacement(
+                    timeline = timeline,
+                    characterRootId = rootNode.id,
+                    initialYaw = baseT.rotation.y,
+                    block = block,
+                    progress = progress
+                )
+                val currentYaw = getCharacterYawAtTime(
+                    timeline = timeline,
+                    characterRootId = rootNode.id,
+                    initialYaw = baseT.rotation.y,
+                    time = if (isCompleted) block.startTime + block.duration else localTime
+                )
 
                 if (isCompleted) {
-                    rootNode.animatedTransform = rootNode.animatedTransform.copy(position = baseT.position + delta)
-                    runningTransforms[rootNode.id] = baseT.copy(position = baseT.position + delta)
+                    val finalDelta = computeIntegratedWalkDisplacement(
+                        timeline = timeline,
+                        characterRootId = rootNode.id,
+                        initialYaw = baseT.rotation.y,
+                        block = block,
+                        progress = 1f
+                    )
+                    rootNode.animatedTransform = rootNode.animatedTransform.copy(
+                        position = baseT.position + finalDelta,
+                        rotation = rootNode.animatedTransform.rotation.copy(y = currentYaw)
+                    )
+                    runningTransforms[rootNode.id] = baseT.copy(
+                        position = baseT.position + finalDelta,
+                        rotation = baseT.rotation.copy(y = currentYaw)
+                    )
                     resetLimbs()
                 } else {
                     val cycle = (progress * block.duration * (PI * 2.0 * 3.2 * block.speed)).toFloat()
@@ -252,7 +377,8 @@ object AnimationEvaluator {
                     val bob = abs(sin(cycle * 2f)) * 0.1f * block.stepSize
 
                     rootNode.animatedTransform = rootNode.animatedTransform.copy(
-                        position = Vec3(currentPos.x, currentPos.y + bob, currentPos.z)
+                        position = Vec3(baseT.position.x + integratedDelta.x, baseT.position.y + integratedDelta.y + bob, baseT.position.z + integratedDelta.z),
+                        rotation = rootNode.animatedTransform.rotation.copy(y = currentYaw)
                     )
 
                     parts[CharacterPartType.LEFT_LEG]?.let {
@@ -490,18 +616,26 @@ object AnimationEvaluator {
             }
 
             ActionBlockType.ROTATE -> {
-                // Concurrent rotation: only modifies Y rotation, doesn't affect position
                 val baseT = runningTransforms.getOrPut(rootNode.id) { rootNode.baseTransform.copyTransform() }
-                val smoothT = if (isCompleted) 1f else progress * progress * (3f - 2f * progress)
-                val rotAmount = block.angle * smoothT
-                val currentRot = rootNode.animatedTransform.rotation
+                val currentYaw = getCharacterYawAtTime(
+                    timeline = timeline,
+                    characterRootId = rootNode.id,
+                    initialYaw = baseT.rotation.y,
+                    time = if (isCompleted) block.startTime + block.duration else localTime
+                )
                 rootNode.animatedTransform = rootNode.animatedTransform.copy(
-                    rotation = currentRot.copy(y = currentRot.y + rotAmount - (if (isCompleted) 0f else block.angle * (if (progress > 0.001f) (progress - 0.001f) * (progress - 0.001f) * (3f - 2f * (progress - 0.001f)) else 0f)))
+                    rotation = rootNode.animatedTransform.rotation.copy(y = currentYaw)
                 )
                 if (isCompleted) {
-                    val newRot = baseT.rotation.copy(y = baseT.rotation.y + block.angle)
-                    runningTransforms[rootNode.id] = baseT.copy(rotation = newRot)
-                    rootNode.animatedTransform = rootNode.animatedTransform.copy(rotation = newRot)
+                    val endYaw = getCharacterYawAtTime(
+                        timeline = timeline,
+                        characterRootId = rootNode.id,
+                        initialYaw = baseT.rotation.y,
+                        time = block.startTime + block.duration
+                    )
+                    runningTransforms[rootNode.id] = baseT.copy(
+                        rotation = baseT.rotation.copy(y = endYaw)
+                    )
                 }
             }
 
@@ -569,7 +703,8 @@ object AnimationEvaluator {
             ActionBlockType.BACKFLIP -> {
                 val baseT = runningTransforms.getOrPut(rootNode.id) { rootNode.baseTransform.copyTransform() }
                 if (isCompleted) {
-                    rootNode.animatedTransform = baseT.copyTransform()
+                    val currentYaw = getCharacterYawAtTime(timeline, rootNode.id, baseT.rotation.y, block.startTime + block.duration)
+                    rootNode.animatedTransform = baseT.copyTransform().copy(rotation = baseT.rotation.copy(y = currentYaw))
                     resetLimbs()
                 } else {
                     // High parabolic jump arc
@@ -577,10 +712,11 @@ object AnimationEvaluator {
                     val height = jumpArc * block.jumpHeight * 1.5f * block.amplitude
                     // Full 360 backward rotation on rootNode so legs, arms and head all rotate together!
                     val flipAngle = -360f * progress
+                    val currentYaw = getCharacterYawAtTime(timeline, rootNode.id, baseT.rotation.y, localTime)
 
                     rootNode.animatedTransform = rootNode.animatedTransform.copy(
                         position = Vec3(baseT.position.x, baseT.position.y + height, baseT.position.z),
-                        rotation = baseT.rotation.copy(x = flipAngle)
+                        rotation = Vec3(flipAngle, currentYaw, baseT.rotation.z)
                     )
                     parts[CharacterPartType.BODY]?.let { body ->
                         body.animatedTransform = body.animatedTransform.copy(rotation = body.baseTransform.rotation.copy(x = -15f * jumpArc))
@@ -895,11 +1031,332 @@ object AnimationEvaluator {
                 }
             }
 
+            ActionBlockType.CIRCLE_WALK -> {
+                val baseT = runningTransforms.getOrPut(rootNode.id) { rootNode.baseTransform.copyTransform() }
+                val radius = 2.5f * block.stepSize
+                val theta = progress * (PI.toFloat() * 2f) * block.speed
+                val localX = radius * (1f - cos(theta))
+                val localZ = radius * sin(theta)
+
+                val currentYaw = getCharacterYawAtTime(timeline, rootNode.id, baseT.rotation.y, if (isCompleted) block.startTime + block.duration else localTime)
+                val rad = Math.toRadians(currentYaw.toDouble())
+                val worldDx = (localX * cos(rad) + localZ * sin(rad)).toFloat()
+                val worldDz = (-localX * sin(rad) + localZ * cos(rad)).toFloat()
+
+                val facingYaw = currentYaw + (theta * 180f / PI.toFloat())
+
+                if (isCompleted) {
+                    rootNode.animatedTransform = rootNode.animatedTransform.copy(
+                        position = baseT.position + Vec3(worldDx, 0f, worldDz),
+                        rotation = rootNode.animatedTransform.rotation.copy(y = facingYaw)
+                    )
+                    runningTransforms[rootNode.id] = baseT.copy(
+                        position = baseT.position + Vec3(worldDx, 0f, worldDz),
+                        rotation = baseT.rotation.copy(y = facingYaw)
+                    )
+                    resetLimbs()
+                } else {
+                    val cycle = (progress * block.duration * (PI * 2.0 * 2.0 * block.speed)).toFloat()
+                    val legAngle = sin(cycle) * 36f
+                    val armAngle = -legAngle * 0.8f
+                    val bob = abs(sin(cycle * 2f)) * 0.05f
+
+                    rootNode.animatedTransform = rootNode.animatedTransform.copy(
+                        position = Vec3(baseT.position.x + worldDx, baseT.position.y + bob, baseT.position.z + worldDz),
+                        rotation = rootNode.animatedTransform.rotation.copy(y = facingYaw)
+                    )
+
+                    parts[CharacterPartType.LEFT_LEG]?.let {
+                        it.animatedTransform = it.animatedTransform.copy(rotation = it.baseTransform.rotation.copy(x = legAngle))
+                    }
+                    parts[CharacterPartType.RIGHT_LEG]?.let {
+                        it.animatedTransform = it.animatedTransform.copy(rotation = it.baseTransform.rotation.copy(x = -legAngle))
+                    }
+                    parts[CharacterPartType.LEFT_ARM]?.let {
+                        it.animatedTransform = it.animatedTransform.copy(rotation = it.baseTransform.rotation.copy(x = armAngle))
+                    }
+                    parts[CharacterPartType.RIGHT_ARM]?.let {
+                        it.animatedTransform = it.animatedTransform.copy(rotation = it.baseTransform.rotation.copy(x = -armAngle))
+                    }
+                    bendLowerLegs(legAngle, -legAngle)
+                    bendForearms(armAngle, -armAngle)
+                }
+            }
+
+            ActionBlockType.SLEEPY -> {
+                if (isCompleted) {
+                    resetLimbs()
+                } else {
+                    val cycleTime = (progress * block.duration) % 3.0f
+                    val cycleProgress = cycleTime / 3.0f
+
+                    val headSag: Float
+                    val bodySag: Float
+                    if (cycleProgress < 0.75f) {
+                        val p = cycleProgress / 0.75f
+                        headSag = 15f + 30f * (p * p)
+                        bodySag = 4f + 8f * p
+                    } else {
+                        val p = (cycleProgress - 0.75f) / 0.25f
+                        headSag = 45f * (1f - p) - 8f * sin(p * PI.toFloat())
+                        bodySag = 12f * (1f - p)
+                    }
+
+                    parts[CharacterPartType.HEAD]?.let {
+                        it.animatedTransform = it.animatedTransform.copy(
+                            rotation = it.baseTransform.rotation.copy(x = headSag, z = 8f * sin(progress * PI.toFloat() * 2f))
+                        )
+                    }
+                    parts[CharacterPartType.BODY]?.let {
+                        it.animatedTransform = it.animatedTransform.copy(
+                            rotation = it.baseTransform.rotation.copy(x = bodySag)
+                        )
+                    }
+                    parts[CharacterPartType.LEFT_ARM]?.let {
+                        it.animatedTransform = it.animatedTransform.copy(
+                            rotation = it.baseTransform.rotation.copy(x = 10f, z = -5f)
+                        )
+                    }
+                    parts[CharacterPartType.RIGHT_ARM]?.let {
+                        it.animatedTransform = it.animatedTransform.copy(
+                            rotation = it.baseTransform.rotation.copy(x = 10f, z = 5f)
+                        )
+                    }
+                }
+            }
+
+            ActionBlockType.PATROL -> {
+                val baseT = runningTransforms.getOrPut(rootNode.id) { rootNode.baseTransform.copyTransform() }
+                val patrolDist = 3.0f * block.stepSize
+                val currentYaw = getCharacterYawAtTime(timeline, rootNode.id, baseT.rotation.y, if (isCompleted) block.startTime + block.duration else localTime)
+                val rad = Math.toRadians(currentYaw.toDouble())
+                val fwdX = sin(rad).toFloat()
+                val fwdZ = cos(rad).toFloat()
+
+                if (isCompleted) {
+                    rootNode.animatedTransform = rootNode.animatedTransform.copy(
+                        position = baseT.position,
+                        rotation = rootNode.animatedTransform.rotation.copy(y = currentYaw)
+                    )
+                    resetLimbs()
+                } else {
+                    var posOffset = 0f
+                    var facingBonus = 0f
+                    var headTurn = 0f
+                    var legSwing = 0f
+
+                    when {
+                        progress < 0.35f -> {
+                            val p = progress / 0.35f
+                            posOffset = patrolDist * p
+                            val cycle = (p * 4f * PI.toFloat() * block.speed)
+                            legSwing = sin(cycle) * 35f
+                        }
+                        progress < 0.45f -> {
+                            posOffset = patrolDist
+                            val p = (progress - 0.35f) / 0.10f
+                            headTurn = -40f * sin(p * PI.toFloat())
+                        }
+                        progress < 0.55f -> {
+                            posOffset = patrolDist
+                            val p = (progress - 0.45f) / 0.10f
+                            headTurn = 40f * sin(p * PI.toFloat())
+                        }
+                        progress < 0.65f -> {
+                            posOffset = patrolDist
+                            val p = (progress - 0.55f) / 0.10f
+                            facingBonus = 180f * p
+                        }
+                        else -> {
+                            val p = (progress - 0.65f) / 0.35f
+                            posOffset = patrolDist * (1f - p)
+                            facingBonus = 180f
+                            val cycle = (p * 4f * PI.toFloat() * block.speed)
+                            legSwing = sin(cycle) * 35f
+                        }
+                    }
+
+                    val armSwing = -legSwing * 0.8f
+                    val bob = if (abs(legSwing) > 1f) abs(sin(progress * 20f)) * 0.05f else 0f
+
+                    val posX = baseT.position.x + fwdX * posOffset
+                    val posZ = baseT.position.z + fwdZ * posOffset
+
+                    rootNode.animatedTransform = rootNode.animatedTransform.copy(
+                        position = Vec3(posX, baseT.position.y + bob, posZ),
+                        rotation = rootNode.animatedTransform.rotation.copy(y = currentYaw + facingBonus)
+                    )
+
+                    parts[CharacterPartType.HEAD]?.let {
+                        it.animatedTransform = it.animatedTransform.copy(
+                            rotation = it.baseTransform.rotation.copy(y = headTurn)
+                        )
+                    }
+                    parts[CharacterPartType.LEFT_LEG]?.let {
+                        it.animatedTransform = it.animatedTransform.copy(rotation = it.baseTransform.rotation.copy(x = legSwing))
+                    }
+                    parts[CharacterPartType.RIGHT_LEG]?.let {
+                        it.animatedTransform = it.animatedTransform.copy(rotation = it.baseTransform.rotation.copy(x = -legSwing))
+                    }
+                    parts[CharacterPartType.LEFT_ARM]?.let {
+                        it.animatedTransform = it.animatedTransform.copy(rotation = it.baseTransform.rotation.copy(x = armSwing))
+                    }
+                    parts[CharacterPartType.RIGHT_ARM]?.let {
+                        it.animatedTransform = it.animatedTransform.copy(rotation = it.baseTransform.rotation.copy(x = -armSwing))
+                    }
+                    bendLowerLegs(legSwing, -legSwing)
+                    bendForearms(armSwing, -armSwing)
+                }
+            }
+
+            ActionBlockType.SWORD_ATTACK -> {
+                if (isCompleted) {
+                    resetLimbs()
+                } else {
+                    val prep = if (progress < 0.3f) progress / 0.3f else 0f
+                    val strike = if (progress >= 0.3f) ((progress - 0.3f) / 0.7f) else 0f
+
+                    parts[CharacterPartType.RIGHT_ARM]?.let {
+                        val armX = -90f * prep + 60f * sin(strike * PI.toFloat())
+                        val armY = -30f * prep + 45f * sin(strike * PI.toFloat())
+                        it.animatedTransform = it.animatedTransform.copy(
+                            rotation = it.baseTransform.rotation.copy(x = armX, y = armY)
+                        )
+                    }
+                    parts[CharacterPartType.BODY]?.let {
+                        it.animatedTransform = it.animatedTransform.copy(
+                            rotation = it.baseTransform.rotation.copy(y = -15f * prep + 20f * sin(strike * PI.toFloat()))
+                        )
+                    }
+                }
+            }
+
             ActionBlockType.DISABLE_CAMERA -> {
                 // Toggle camera enabled state for the target node during playback/export
                 val camNode = sceneGraph.getNode(block.targetNodeId) ?: return
                 if (camNode.type == SceneNodeType.CAMERA && camNode.cameraData != null) {
                     camNode.cameraData = camNode.cameraData!!.copy(enabled = false)
+                }
+            }
+
+            ActionBlockType.CONVERSATION -> {
+                if (isCompleted) {
+                    resetLimbs()
+                } else {
+                    val cycle = (progress * block.duration * (PI * 2.0 * 2.5 * block.speed)).toFloat()
+                    val headPitch = sin(cycle) * 8f * block.amplitude
+                    val headYaw = sin(cycle * 0.7f) * 14f * block.amplitude
+                    parts[CharacterPartType.HEAD]?.let {
+                        it.animatedTransform = it.animatedTransform.copy(
+                            rotation = it.baseTransform.rotation.copy(x = headPitch, y = headYaw)
+                        )
+                    }
+                    val rightArmPitch = -25f + sin(cycle * 1.2f) * 20f * block.amplitude
+                    val rightArmRoll = 15f + sin(cycle * 0.9f) * 10f * block.amplitude
+                    parts[CharacterPartType.RIGHT_ARM]?.let {
+                        it.animatedTransform = it.animatedTransform.copy(
+                            rotation = it.baseTransform.rotation.copy(x = rightArmPitch, z = rightArmRoll)
+                        )
+                    }
+                    parts[CharacterPartType.RIGHT_FOREARM]?.let {
+                        it.animatedTransform = it.animatedTransform.copy(
+                            rotation = it.baseTransform.rotation.copy(x = 35f + sin(cycle * 1.2f) * 15f)
+                        )
+                    }
+                    val leftArmPitch = -15f + sin(cycle * 0.8f + 1f) * 12f * block.amplitude
+                    parts[CharacterPartType.LEFT_ARM]?.let {
+                        it.animatedTransform = it.animatedTransform.copy(
+                            rotation = it.baseTransform.rotation.copy(x = leftArmPitch)
+                        )
+                    }
+                }
+            }
+
+            ActionBlockType.FARMING -> {
+                if (isCompleted) {
+                    resetLimbs()
+                } else {
+                    val cycle = (progress * block.duration * (PI * 2.0 * 1.8 * block.speed)).toFloat()
+                    val stroke = sin(cycle)
+                    val bodyLean = 22f + stroke * 8f * block.amplitude
+                    parts[CharacterPartType.BODY]?.let {
+                        it.animatedTransform = it.animatedTransform.copy(
+                            rotation = it.baseTransform.rotation.copy(x = bodyLean)
+                        )
+                    }
+                    parts[CharacterPartType.HEAD]?.let {
+                        it.animatedTransform = it.animatedTransform.copy(
+                            rotation = it.baseTransform.rotation.copy(x = 20f + stroke * 5f)
+                        )
+                    }
+                    val armSwing = -40f + stroke * 35f * block.amplitude
+                    parts[CharacterPartType.RIGHT_ARM]?.let {
+                        it.animatedTransform = it.animatedTransform.copy(
+                            rotation = it.baseTransform.rotation.copy(x = armSwing, y = -10f)
+                        )
+                    }
+                    parts[CharacterPartType.LEFT_ARM]?.let {
+                        it.animatedTransform = it.animatedTransform.copy(
+                            rotation = it.baseTransform.rotation.copy(x = armSwing * 0.7f, y = 10f)
+                        )
+                    }
+                    parts[CharacterPartType.RIGHT_FOREARM]?.let {
+                        it.animatedTransform = it.animatedTransform.copy(
+                            rotation = it.baseTransform.rotation.copy(x = 45f + stroke * 20f)
+                        )
+                    }
+                    parts[CharacterPartType.LEFT_FOREARM]?.let {
+                        it.animatedTransform = it.animatedTransform.copy(
+                            rotation = it.baseTransform.rotation.copy(x = 30f + stroke * 15f)
+                        )
+                    }
+                }
+            }
+
+            ActionBlockType.EATING -> {
+                if (isCompleted) {
+                    resetLimbs()
+                } else {
+                    val cycle = (progress * block.duration * (PI * 2.0 * 3.5 * block.speed)).toFloat()
+                    val chew = sin(cycle) * 5f * block.amplitude
+                    parts[CharacterPartType.HEAD]?.let {
+                        it.animatedTransform = it.animatedTransform.copy(
+                            rotation = it.baseTransform.rotation.copy(x = 10f + chew)
+                        )
+                    }
+                    val biteCycle = sin(cycle * 0.5f)
+                    val armX = -85f + biteCycle * 10f
+                    val armZ = 20f
+                    parts[CharacterPartType.RIGHT_ARM]?.let {
+                        it.animatedTransform = it.animatedTransform.copy(
+                            rotation = it.baseTransform.rotation.copy(x = armX, z = armZ)
+                        )
+                    }
+                    parts[CharacterPartType.RIGHT_FOREARM]?.let {
+                        it.animatedTransform = it.animatedTransform.copy(
+                            rotation = it.baseTransform.rotation.copy(x = 65f + biteCycle * 10f)
+                        )
+                    }
+                }
+            }
+
+            ActionBlockType.LOOK_AROUND -> {
+                if (isCompleted) {
+                    resetLimbs()
+                } else {
+                    val cycle = (progress * block.duration * (PI * 2.0 * 0.6 * block.speed)).toFloat()
+                    val headYaw = sin(cycle) * 38f * block.amplitude
+                    val headPitch = sin(cycle * 2f) * 8f * block.amplitude
+                    parts[CharacterPartType.HEAD]?.let {
+                        it.animatedTransform = it.animatedTransform.copy(
+                            rotation = it.baseTransform.rotation.copy(x = headPitch, y = headYaw)
+                        )
+                    }
+                    parts[CharacterPartType.BODY]?.let {
+                        it.animatedTransform = it.animatedTransform.copy(
+                            rotation = it.baseTransform.rotation.copy(y = headYaw * 0.25f)
+                        )
+                    }
                 }
             }
         }

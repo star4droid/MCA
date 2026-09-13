@@ -16,6 +16,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.ui.input.pointer.changedToUp
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.text.font.FontFamily
@@ -38,6 +39,7 @@ import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.CenterFocusStrong
 import androidx.compose.material.icons.filled.Check
@@ -69,6 +71,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
@@ -133,6 +136,7 @@ fun EditorScreen(
     var timeOfDayMenuOpen by remember { mutableStateOf(false) }
     var isAiStudioOpen by remember { mutableStateOf(false) }
     var isCustomBlocksManagerOpen by remember { mutableStateOf(false) }
+    var isSavedObjectsOpen by remember { mutableStateOf(false) }
     var isMp4ExportDialogOpen by remember { mutableStateOf(false) }
     var renderResultFile by remember { mutableStateOf<java.io.File?>(null) }
     val isExporting by viewModel.isExporting.collectAsState()
@@ -305,6 +309,23 @@ fun EditorScreen(
                     Icon(Icons.Default.FolderOpen, contentDescription = "Import Files", tint = Color(0xFF38BDF8), modifier = Modifier.size(18.dp))
                 }
 
+                Spacer(modifier = Modifier.width(4.dp))
+
+                // Saved Objects Icon Button (At the top of / beside Add)
+                IconButton(
+                    onClick = { isSavedObjectsOpen = true },
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Bookmark,
+                        contentDescription = "Saved Objects",
+                        tint = Color(0xFFF59E0B),
+                        modifier = Modifier.size(19.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(4.dp))
+
                 // Add Object Menu (Including Lights)
                 Box {
                     IconButton(
@@ -318,6 +339,16 @@ fun EditorScreen(
                         onDismissRequest = { addMenuOpen = false },
                         modifier = Modifier.background(Color(0xFF1E293B))
                     ) {
+                        DropdownMenuItem(
+                            text = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.Bookmark, contentDescription = null, tint = Color(0xFFF59E0B), modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Saved Objects 📦", color = Color(0xFFFCD34D), fontWeight = FontWeight.Bold)
+                                }
+                            },
+                            onClick = { addMenuOpen = false; isSavedObjectsOpen = true }
+                        )
                         DropdownMenuItem(
                             text = { Text("Add Block 🧊", color = Color.White) },
                             onClick = { addMenuOpen = false; viewModel.addBlock("grass") }
@@ -660,7 +691,54 @@ fun EditorScreen(
                         )
                     }
                 }
+
+                // 2F. Camera Mode Control FAB (Visible when in Camera Mode or using Scene Camera)
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = uiState.editorMode == EditorMode.CAMERA || uiState.isSceneCameraActive,
+                    enter = fadeIn() + slideInHorizontally(initialOffsetX = { it }),
+                    exit = fadeOut() + slideOutHorizontally(targetOffsetX = { it }),
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(end = 16.dp)
+                ) {
+                    FloatingActionButton(
+                        onClick = { viewModel.toggleCameraControl() },
+                        containerColor = if (uiState.isCameraControlActive) Color(0xFFF59E0B) else Color(0xFF1E293B),
+                        contentColor = if (uiState.isCameraControlActive) Color.Black else Color.White,
+                        shape = CircleShape,
+                        modifier = Modifier.size(56.dp)
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center,
+                            modifier = Modifier.padding(4.dp)
+                        ) {
+                            Icon(
+                                if (uiState.isCameraControlActive) Icons.Default.TouchApp else Icons.Default.Videocam,
+                                contentDescription = "Camera Control",
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                "Control",
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
             }
+        }
+
+        // Saved Objects Dialog
+        if (isSavedObjectsOpen || uiState.isSavedObjectsOpen) {
+            com.star4droid.mc.animation.ui.dialogs.SavedObjectsDialog(
+                viewModel = viewModel,
+                onDismiss = {
+                    isSavedObjectsOpen = false
+                    viewModel.closeSavedObjects()
+                }
+            )
         }
 
         // Asset Browser Sheet
@@ -855,6 +933,29 @@ fun EditorScreen(
                     Icon(Icons.Filled.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(msg, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+            }
+        }
+
+        // Loading Models Overlay
+        if (uiState.isLoadingModels) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 16.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color(0xEE0F172A))
+                    .border(1.dp, Color(0xFF38BDF8), RoundedCornerShape(8.dp))
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        color = Color(0xFF38BDF8),
+                        strokeWidth = 2.dp
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Loading 3D Models...", color = Color.White, fontWeight = FontWeight.Medium, fontSize = 12.sp)
                 }
             }
         }

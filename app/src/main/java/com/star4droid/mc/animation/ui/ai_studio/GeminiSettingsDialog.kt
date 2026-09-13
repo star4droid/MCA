@@ -31,9 +31,10 @@ fun GeminiSettingsDialog(
     var isModelDropdownOpen by remember { mutableStateOf(false) }
 
     val presetModels = listOf(
+        "gemini-flash-latest",
+        "gemini-2.5-flash",
         "gemini-3.5-flash",
-        "gemini-3.8-flash",
-        "gemini-3.5-flash-lite",
+        "gemini-3.1-flash-lite-preview",
         "gemini-3.1-pro-preview"
     )
 
@@ -83,6 +84,26 @@ fun GeminiSettingsDialog(
                             unfocusedTextColor = Color.White
                         )
                     )
+                    Spacer(modifier = Modifier.height(3.dp))
+                    if (GeminiApiService.isUsingBuildConfigKey(context)) {
+                        Text(
+                            "✓ Active: Using GEMINI_API_KEY from AI Studio Secrets",
+                            fontSize = 10.sp,
+                            color = Color(0xFF10B981)
+                        )
+                    } else if (apiKey.isNotBlank()) {
+                        Text(
+                            "✓ Custom API Key configured",
+                            fontSize = 10.sp,
+                            color = Color(0xFF38BDF8)
+                        )
+                    } else {
+                        Text(
+                            "No API key detected. Set one here or in Secrets.",
+                            fontSize = 10.sp,
+                            color = Color(0xFFF59E0B)
+                        )
+                    }
                 }
 
                 // Model Selector Spinner / Entry

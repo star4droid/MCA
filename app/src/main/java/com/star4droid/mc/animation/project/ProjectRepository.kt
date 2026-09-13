@@ -219,6 +219,12 @@ class ProjectRepository(private val context: Context) {
                 skinId = "steve",
                 position = Vec3(0f, 0f, 0f)
             )
+        } else if (template == "village") {
+            sceneGraph.nodes.clear()
+            sceneGraph.rootNodeIds.clear()
+            timelines.clear()
+            instances.clear()
+            populateVillageScene(sceneGraph, timelines, instances)
         }
 
         val metadata = ProjectMetadata(
@@ -243,6 +249,27 @@ class ProjectRepository(private val context: Context) {
         val sceneGraph = SceneGraph()
         val timelines = mutableListOf<TimelineAsset>()
         val instances = mutableListOf<TimelineInstance>()
+
+        populateVillageScene(sceneGraph, timelines, instances)
+
+        val metadata = ProjectMetadata(
+            id = id,
+            name = name,
+            createdAt = System.currentTimeMillis(),
+            updatedAt = System.currentTimeMillis(),
+            nodeCount = sceneGraph.nodes.size,
+            timelineCount = timelines.size
+        )
+
+        saveProject(id, metadata, sceneGraph, timelines, instances)
+        return id
+    }
+
+    fun populateVillageScene(
+        sceneGraph: SceneGraph,
+        timelines: MutableList<TimelineAsset>,
+        instances: MutableList<TimelineInstance>
+    ) {
 
         // 1. Main Camera
         val cameraNode = SceneNode(
@@ -541,22 +568,151 @@ class ProjectRepository(private val context: Context) {
             position = Vec3(-10f, 5f, 12f)
         )
 
-        // 10. Main 30-Second Timeline & Keyframes
+        val knightCaptainRoot = CharacterFactory.addCharacterToScene(
+            sceneGraph = sceneGraph,
+            name = "Knight Captain",
+            isAlex = false,
+            skinId = "steve",
+            position = Vec3(2f, 0f, -3f)
+        )
+
+        val minerJoeRoot = CharacterFactory.addCharacterToScene(
+            sceneGraph = sceneGraph,
+            name = "Miner Joe",
+            isAlex = false,
+            skinId = "steve",
+            position = Vec3(-6f, 0f, -12f)
+        )
+
+        val merchantAlexRoot = CharacterFactory.addCharacterToScene(
+            sceneGraph = sceneGraph,
+            name = "Merchant Alex",
+            isAlex = true,
+            skinId = "alex",
+            position = Vec3(4f, 0f, 4f)
+        )
+
+        // 10. Main 30-Second Timeline & Action Blocks
         val mainTimeline = TimelineAsset(
             id = "timeline_main",
             name = "Main Timeline",
             duration = 30.0f
         )
 
-        mainTimeline.actionBlocks.add(ActionBlock(id = "st1_w", type = ActionBlockType.WALK, targetNodeId = steve1Root, startTime = 0f, duration = 8f, speed = 1f, isDeltaBased = true))
-        mainTimeline.actionBlocks.add(ActionBlock(id = "al1_w", type = ActionBlockType.WALK, targetNodeId = alex1Root, startTime = 2f, duration = 6f, speed = 1f, isDeltaBased = true))
-        mainTimeline.actionBlocks.add(ActionBlock(id = "st1_wave", type = ActionBlockType.WAVE, targetNodeId = steve1Root, startTime = 8.5f, duration = 4f, speed = 1f))
-        mainTimeline.actionBlocks.add(ActionBlock(id = "al1_wave", type = ActionBlockType.WAVE, targetNodeId = alex1Root, startTime = 8.5f, duration = 4f, speed = 1f))
+        // Steve Traveler (Walks forward into town, waves, cheers, backflips, runs, taunts)
+        mainTimeline.actionBlocks.add(
+            ActionBlock(
+                id = "st1_w",
+                type = ActionBlockType.WALK,
+                targetNodeId = steve1Root,
+                startTime = 0f,
+                duration = 8f,
+                speed = 1f,
+                isDeltaBased = true,
+                enablePositionMove = true,
+                moveVector = Vec3(0f, 0f, 1.2f),
+                stepSize = 1f
+            )
+        )
+        mainTimeline.actionBlocks.add(ActionBlock(id = "st1_wave", type = ActionBlockType.WAVE, targetNodeId = steve1Root, startTime = 8f, duration = 4f, speed = 1f))
+        mainTimeline.actionBlocks.add(ActionBlock(id = "st1_cheer", type = ActionBlockType.CHEER, targetNodeId = steve1Root, startTime = 12f, duration = 4f, speed = 1f))
+        mainTimeline.actionBlocks.add(ActionBlock(id = "st1_flip", type = ActionBlockType.BACKFLIP, targetNodeId = steve1Root, startTime = 16f, duration = 2.5f, jumpHeight = 1.2f))
+        mainTimeline.actionBlocks.add(
+            ActionBlock(
+                id = "st1_run",
+                type = ActionBlockType.RUN,
+                targetNodeId = steve1Root,
+                startTime = 19f,
+                duration = 7f,
+                speed = 1.2f,
+                isDeltaBased = true,
+                enablePositionMove = true,
+                moveVector = Vec3(0f, 0f, 1.5f),
+                stepSize = 1f
+            )
+        )
+        mainTimeline.actionBlocks.add(ActionBlock(id = "st1_taunt", type = ActionBlockType.TAUNT, targetNodeId = steve1Root, startTime = 26f, duration = 4f, speed = 1f))
 
-        mainTimeline.actionBlocks.add(ActionBlock(id = "st_g_look", type = ActionBlockType.LOOK_LEFT, targetNodeId = steveGuardRoot, startTime = 12f, duration = 6f, speed = 1f))
-        mainTimeline.actionBlocks.add(ActionBlock(id = "al_g_taunt", type = ActionBlockType.TAUNT, targetNodeId = alexGuardRoot, startTime = 12f, duration = 4f, speed = 1f))
-        mainTimeline.actionBlocks.add(ActionBlock(id = "st_t_cheer", type = ActionBlockType.CHEER, targetNodeId = steveTavernRoot, startTime = 6f, duration = 6f, speed = 1f))
-        mainTimeline.actionBlocks.add(ActionBlock(id = "al_p_walk", type = ActionBlockType.WALK, targetNodeId = alexPatrolRoot, startTime = 14f, duration = 8f, speed = 1f, isDeltaBased = true))
+        // Alex Traveler (Walks towards Steve, waves back, jumps, walks in circle, flips, bows)
+        mainTimeline.actionBlocks.add(
+            ActionBlock(
+                id = "al1_w",
+                type = ActionBlockType.WALK,
+                targetNodeId = alex1Root,
+                startTime = 0f,
+                duration = 6f,
+                speed = 1f,
+                isDeltaBased = true,
+                enablePositionMove = true,
+                moveVector = Vec3(0f, 0f, -0.9f),
+                stepSize = 1f
+            )
+        )
+        mainTimeline.actionBlocks.add(ActionBlock(id = "al1_wave", type = ActionBlockType.WAVE, targetNodeId = alex1Root, startTime = 6f, duration = 4f, speed = 1f))
+        mainTimeline.actionBlocks.add(ActionBlock(id = "al1_jump", type = ActionBlockType.JUMP, targetNodeId = alex1Root, startTime = 10f, duration = 3.5f, speed = 1f))
+        mainTimeline.actionBlocks.add(ActionBlock(id = "al1_circle", type = ActionBlockType.CIRCLE_WALK, targetNodeId = alex1Root, startTime = 14f, duration = 8f, speed = 1f, stepSize = 1f))
+        mainTimeline.actionBlocks.add(ActionBlock(id = "al1_flip", type = ActionBlockType.BACKFLIP, targetNodeId = alex1Root, startTime = 22.5f, duration = 2.5f, jumpHeight = 1.1f))
+        mainTimeline.actionBlocks.add(ActionBlock(id = "al1_bow", type = ActionBlockType.BOW, targetNodeId = alex1Root, startTime = 25.5f, duration = 4.5f, speed = 1f))
+
+        // Tower Guard Steve (Inspects horizon with LOOK_AROUND, gets sleepy nodding off, wakes up to patrol, taunts)
+        mainTimeline.actionBlocks.add(ActionBlock(id = "st_g_look", type = ActionBlockType.LOOK_AROUND, targetNodeId = steveGuardRoot, startTime = 0f, duration = 5f, speed = 1f))
+        mainTimeline.actionBlocks.add(ActionBlock(id = "st_g_sleepy", type = ActionBlockType.SLEEPY, targetNodeId = steveGuardRoot, startTime = 5f, duration = 9f, speed = 1f))
+        mainTimeline.actionBlocks.add(ActionBlock(id = "st_g_look2", type = ActionBlockType.LOOK_RIGHT, targetNodeId = steveGuardRoot, startTime = 14f, duration = 4f, speed = 1f))
+        mainTimeline.actionBlocks.add(ActionBlock(id = "st_g_patrol", type = ActionBlockType.PATROL, targetNodeId = steveGuardRoot, startTime = 18f, duration = 8f, speed = 1f, stepSize = 0.6f))
+        mainTimeline.actionBlocks.add(ActionBlock(id = "st_g_taunt", type = ActionBlockType.TAUNT, targetNodeId = steveGuardRoot, startTime = 26f, duration = 4f, speed = 1f))
+
+        // Gatekeeper Alex (Patrols the castle entrance, practices sword attacks, sleepy rest, cheers)
+        mainTimeline.actionBlocks.add(ActionBlock(id = "al_g_patrol", type = ActionBlockType.PATROL, targetNodeId = alexGuardRoot, startTime = 0f, duration = 9f, speed = 1f, stepSize = 1f))
+        mainTimeline.actionBlocks.add(ActionBlock(id = "al_g_sword", type = ActionBlockType.SWORD_ATTACK, targetNodeId = alexGuardRoot, startTime = 9.5f, duration = 5.5f, speed = 1.2f))
+        mainTimeline.actionBlocks.add(ActionBlock(id = "al_g_taunt", type = ActionBlockType.TAUNT, targetNodeId = alexGuardRoot, startTime = 15.5f, duration = 4.5f, speed = 1f))
+        mainTimeline.actionBlocks.add(ActionBlock(id = "al_g_sleepy", type = ActionBlockType.SLEEPY, targetNodeId = alexGuardRoot, startTime = 20f, duration = 6f, speed = 1f))
+        mainTimeline.actionBlocks.add(ActionBlock(id = "al_g_cheer", type = ActionBlockType.CHEER, targetNodeId = alexGuardRoot, startTime = 26f, duration = 4f, speed = 1f))
+
+        // Tavern Host Steve (Welcomes guests, enjoys tavern snacks with EATING, has friendly CONVERSATION, circle dance, bows)
+        mainTimeline.actionBlocks.add(ActionBlock(id = "st_t_wave", type = ActionBlockType.WAVE, targetNodeId = steveTavernRoot, startTime = 0f, duration = 5f, speed = 1f))
+        mainTimeline.actionBlocks.add(ActionBlock(id = "st_t_eat", type = ActionBlockType.EATING, targetNodeId = steveTavernRoot, startTime = 5f, duration = 5f, speed = 1.1f))
+        mainTimeline.actionBlocks.add(ActionBlock(id = "st_t_talk", type = ActionBlockType.CONVERSATION, targetNodeId = steveTavernRoot, startTime = 10.5f, duration = 6f, speed = 1f))
+        mainTimeline.actionBlocks.add(ActionBlock(id = "st_t_circle", type = ActionBlockType.CIRCLE_WALK, targetNodeId = steveTavernRoot, startTime = 17f, duration = 8f, speed = 0.9f, stepSize = 0.8f))
+        mainTimeline.actionBlocks.add(ActionBlock(id = "st_t_bow", type = ActionBlockType.BOW, targetNodeId = steveTavernRoot, startTime = 25f, duration = 5f, speed = 1f))
+
+        // Castle Wall Patrol Alex (Patrols along rampart, executes sword combat stance, patrols back)
+        mainTimeline.actionBlocks.add(ActionBlock(id = "al_p_patrol1", type = ActionBlockType.PATROL, targetNodeId = alexPatrolRoot, startTime = 0f, duration = 14f, speed = 1f, stepSize = 1.2f))
+        mainTimeline.actionBlocks.add(ActionBlock(id = "al_p_sword", type = ActionBlockType.SWORD_ATTACK, targetNodeId = alexPatrolRoot, startTime = 14.5f, duration = 4.5f, speed = 1.2f))
+        mainTimeline.actionBlocks.add(ActionBlock(id = "al_p_patrol2", type = ActionBlockType.PATROL, targetNodeId = alexPatrolRoot, startTime = 19.5f, duration = 10.5f, speed = 1f, stepSize = 1.2f))
+
+        // Knight Captain (At city square: patrols, attacks with sword, circle walks, backflips, cheers)
+        mainTimeline.actionBlocks.add(ActionBlock(id = "kc_patrol", type = ActionBlockType.PATROL, targetNodeId = knightCaptainRoot, startTime = 0f, duration = 8f, speed = 1f, stepSize = 1f))
+        mainTimeline.actionBlocks.add(ActionBlock(id = "kc_sword", type = ActionBlockType.SWORD_ATTACK, targetNodeId = knightCaptainRoot, startTime = 8.5f, duration = 5f, speed = 1.2f))
+        mainTimeline.actionBlocks.add(ActionBlock(id = "kc_circle", type = ActionBlockType.CIRCLE_WALK, targetNodeId = knightCaptainRoot, startTime = 14f, duration = 8f, speed = 1f, stepSize = 1f))
+        mainTimeline.actionBlocks.add(ActionBlock(id = "kc_flip", type = ActionBlockType.BACKFLIP, targetNodeId = knightCaptainRoot, startTime = 22.5f, duration = 2.5f, jumpHeight = 1.3f))
+        mainTimeline.actionBlocks.add(ActionBlock(id = "kc_cheer", type = ActionBlockType.CHEER, targetNodeId = knightCaptainRoot, startTime = 25.5f, duration = 4.5f, speed = 1f))
+
+        // Miner Joe (Sneaks, backflips in joy, jumps, walks in circle, cheers)
+        mainTimeline.actionBlocks.add(
+            ActionBlock(
+                id = "mj_sneak",
+                type = ActionBlockType.SNEAK_WALK,
+                targetNodeId = minerJoeRoot,
+                startTime = 0f,
+                duration = 8f,
+                speed = 0.8f,
+                isDeltaBased = true,
+                enablePositionMove = true,
+                moveVector = Vec3(0.5f, 0f, 0.5f),
+                stepSize = 0.8f
+            )
+        )
+        mainTimeline.actionBlocks.add(ActionBlock(id = "mj_flip", type = ActionBlockType.BACKFLIP, targetNodeId = minerJoeRoot, startTime = 8.5f, duration = 2.5f, jumpHeight = 1.1f))
+        mainTimeline.actionBlocks.add(ActionBlock(id = "mj_jump", type = ActionBlockType.JUMP, targetNodeId = minerJoeRoot, startTime = 11.5f, duration = 3.5f, speed = 1f))
+        mainTimeline.actionBlocks.add(ActionBlock(id = "mj_circle", type = ActionBlockType.CIRCLE_WALK, targetNodeId = minerJoeRoot, startTime = 15.5f, duration = 7.5f, speed = 1f, stepSize = 0.9f))
+        mainTimeline.actionBlocks.add(ActionBlock(id = "mj_cheer", type = ActionBlockType.CHEER, targetNodeId = minerJoeRoot, startTime = 23.5f, duration = 6.5f, speed = 1f))
+
+        // Merchant Alex (At the market stalls: greets, walks around stalls in circle, bargains with CONVERSATION, cheers, bows)
+        mainTimeline.actionBlocks.add(ActionBlock(id = "ma_wave", type = ActionBlockType.WAVE, targetNodeId = merchantAlexRoot, startTime = 0f, duration = 5f, speed = 1.1f))
+        mainTimeline.actionBlocks.add(ActionBlock(id = "ma_circle", type = ActionBlockType.CIRCLE_WALK, targetNodeId = merchantAlexRoot, startTime = 5.5f, duration = 8f, speed = 0.9f, stepSize = 0.9f))
+        mainTimeline.actionBlocks.add(ActionBlock(id = "ma_talk", type = ActionBlockType.CONVERSATION, targetNodeId = merchantAlexRoot, startTime = 14f, duration = 5f, speed = 1f))
+        mainTimeline.actionBlocks.add(ActionBlock(id = "ma_cheer", type = ActionBlockType.CHEER, targetNodeId = merchantAlexRoot, startTime = 19f, duration = 6f, speed = 1f))
+        mainTimeline.actionBlocks.add(ActionBlock(id = "ma_bow", type = ActionBlockType.BOW, targetNodeId = merchantAlexRoot, startTime = 25f, duration = 5f, speed = 1f))
 
         val camPosX = mainTimeline.getOrCreateTrack("cam_main", "transform.position.x")
         camPosX.addOrUpdateKeyframe(0f, -20f, Interpolation.SMOOTH)
@@ -600,18 +756,6 @@ class ProjectRepository(private val context: Context) {
 
         timelines.add(mainTimeline)
         instances.add(TimelineInstance(timelineAssetId = mainTimeline.id))
-
-        val metadata = ProjectMetadata(
-            id = id,
-            name = name,
-            createdAt = System.currentTimeMillis(),
-            updatedAt = System.currentTimeMillis(),
-            nodeCount = sceneGraph.nodes.size,
-            timelineCount = timelines.size
-        )
-
-        saveProject(id, metadata, sceneGraph, timelines, instances)
-        return id
     }
 
     fun loadProject(id: String): LoadedProject? {
@@ -843,6 +987,7 @@ class ProjectRepository(private val context: Context) {
                 put("shadows", it.shadows)
             })
         }
+        node.objFilePath?.let { put("objFilePath", it) }
     }
 
     private fun deserializeNode(obj: JSONObject): SceneNode {
@@ -914,6 +1059,8 @@ class ProjectRepository(private val context: Context) {
             )
         } else null
 
+        val objFilePath = if (obj.has("objFilePath") && !obj.isNull("objFilePath")) obj.getString("objFilePath") else null
+
         return SceneNode(
             id = id,
             name = name,
@@ -928,7 +1075,8 @@ class ProjectRepository(private val context: Context) {
             characterSkinId = skinId,
             boxDimensions = boxDimensions,
             cameraData = cameraData,
-            lightData = lightData
+            lightData = lightData,
+            objFilePath = objFilePath
         )
     }
 

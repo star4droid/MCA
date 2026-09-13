@@ -128,38 +128,85 @@ object ObjImporter {
         val centerY = if (maxY >= minY) (minY + maxY) * 0.5f else 0.5f
         val centerZ = if (maxZ >= minZ) (minZ + maxZ) * 0.5f else 0f
 
-        val spanX = if (maxX >= minX) (maxX - minX).coerceAtLeast(0.2f) else 1.0f
-        val spanY = if (maxY >= minY) (maxY - minY).coerceAtLeast(0.2f) else 1.0f
-        val spanZ = if (maxZ >= minZ) (maxZ - minZ).coerceAtLeast(0.2f) else 1.0f
+        val rawSpanX = if (maxX >= minX) (maxX - minX).coerceAtLeast(0.01f) else 1.0f
+        val rawSpanY = if (maxY >= minY) (maxY - minY).coerceAtLeast(0.01f) else 1.0f
+        val rawSpanZ = if (maxZ >= minZ) (maxZ - minZ).coerceAtLeast(0.01f) else 1.0f
 
-        // Center vertices around local origin (0,0,0)
+        // Auto-scale large models down to standard scene scale (keeping exact aspect ratio)
+        val maxSpan = maxOf(rawSpanX, rawSpanY, rawSpanZ)
+        val targetMax = 2.0f // Standard character/object height in scene (2 blocks)
+        val autoScale = if (maxSpan > targetMax) (targetMax / maxSpan) else 1.0f
+
+        val finalSpanX = rawSpanX * autoScale
+        val finalSpanY = rawSpanY * autoScale
+        val finalSpanZ = rawSpanZ * autoScale
+
+        // Center vertices around local origin (0,0,0) and apply autoScale
         val centerVec = Vec3(centerX, centerY, centerZ)
         val centeredTriangles = triangles.map { t ->
             t.copy(
-                v1 = t.v1 - centerVec,
-                v2 = t.v2 - centerVec,
-                v3 = t.v3 - centerVec
+                v1 = (t.v1 - centerVec) * autoScale,
+                v2 = (t.v2 - centerVec) * autoScale,
+                v3 = (t.v3 - centerVec) * autoScale
             )
         }
 
-        // Texture discovery
+        // Texture and Material discovery
         if (parentFolder != null) {
             val imgExtensions = listOf("png", "jpg", "jpeg", "webp")
             var textureFile: File? = null
 
-            if (mtlFileName != null) {
-                val mtlFile = File(parentFolder, mtlFileName)
-                if (mtlFile.exists()) {
-                    val texNameFromMtl = parseMtlFile(mtlFile.inputStream())
-                    if (texNameFromMtl != null) {
-                        textureFile = File(parentFolder, texNameFromMtl)
+            // 1. Check MTL specified in obj file or fallback to <defaultName>.mtl
+            val mtlCandidates = mutableListOf<File>()
+            if (!mtlFileName.isNullOrBlank()) {
+                mtlCandidates.add(File(parentFolder, mtlFileName!!))
+            }
+            mtlCandidates.add(File(parentFolder, "$defaultName.mtl"))
+            val candidateMtl = mtlCandidates.firstOrNull { it.exists() }
+
+            if (candidateMtl != null) {
+                try {
+                    val mtlTextures = parseMtlFile(candidateMtl.inputStream())
+                    for (texName in mtlTextures) {
+                        // Check direct parent folder, subfolders textures/, images/, etc.
+                        val direct = File(parentFolder, texName)
+                        if (direct.exists()) {
+                            textureFile = direct
+                            break
+                        }
+                        val inTexturesSub = File(parentFolder, "textures/$texName")
+                        if (inTexturesSub.exists()) {
+                            textureFile = inTexturesSub
+                            break
+                        }
+                        val inImagesSub = File(parentFolder, "images/$texName")
+                        if (inImagesSub.exists()) {
+                            textureFile = inImagesSub
+                            break
+                        }
+                        // Case-insensitive match in folder
+                        val caseMatch = parentFolder.listFiles()?.firstOrNull { it.name.equals(texName, ignoreCase = true) }
+                        if (caseMatch != null) {
+                            textureFile = caseMatch
+                            break
+                        }
                     }
+                } catch (e: Exception) {
+                    e.printStackTrace()
                 }
             }
 
+            // 2. If not found via MTL, check if an image with the model's name exists
             if (textureFile == null || !textureFile.exists()) {
                 textureFile = parentFolder.listFiles()?.firstOrNull {
                     it.nameWithoutExtension.equals(defaultName, ignoreCase = true) && it.extension.lowercase() in imgExtensions
+                }
+            }
+
+            // 3. Fallback: check any image inside parent folder
+            if (textureFile == null || !textureFile.exists()) {
+                textureFile = parentFolder.listFiles()?.firstOrNull {
+                    it.isFile && it.extension.lowercase() in imgExtensions
                 }
             }
 
@@ -174,30 +221,46 @@ object ObjImporter {
 
         val objData = ObjModelData(rawVertices, normals, uvs, centeredTriangles)
 
+        // Spawn position: placed nicely on ground at center
+        val spawnPos = Vec3(0f, finalSpanY * 0.5f, 0f)
+
         return SceneNode(
             id = UUID.randomUUID().toString(),
             name = defaultName,
             type = SceneNodeType.BLOCK,
-            baseTransform = Transform(position = Vec3(centerX, centerY, centerZ)),
-            animatedTransform = Transform(position = Vec3(centerX, centerY, centerZ)),
+            baseTransform = Transform(position = spawnPos),
+            animatedTransform = Transform(position = spawnPos),
             material = Material(textureAssetId = textureAssetId),
-            boxDimensions = Vec3(spanX, spanY, spanZ),
+            boxDimensions = Vec3(finalSpanX, finalSpanY, finalSpanZ),
             objModelData = objData
         )
     }
 
-    fun parseMtlFile(inputStream: InputStream): String? {
+    fun parseMtlFile(inputStream: InputStream): List<String> {
+        val textures = mutableListOf<String>()
         val reader = BufferedReader(InputStreamReader(inputStream))
         var line: String?
         while (reader.readLine().also { line = it } != null) {
             val l = line?.trim() ?: continue
-            if (l.startsWith("map_Kd")) {
-                val parts = l.split("\\s+".toRegex())
-                if (parts.size >= 2) {
-                    return parts[1]
+            if (l.startsWith("map_Kd", ignoreCase = true) ||
+                l.startsWith("map_Ka", ignoreCase = true) ||
+                l.startsWith("map_bump", ignoreCase = true) ||
+                l.startsWith("bump", ignoreCase = true)) {
+                val tokens = l.split("\\s+".toRegex())
+                val imgToken = tokens.findLast {
+                    it.contains(".png", ignoreCase = true) ||
+                    it.contains(".jpg", ignoreCase = true) ||
+                    it.contains(".jpeg", ignoreCase = true) ||
+                    it.contains(".webp", ignoreCase = true)
+                } ?: tokens.lastOrNull()?.takeIf { it != tokens[0] }
+                if (imgToken != null) {
+                    val clean = File(imgToken.replace('\\', '/')).name.removeSurrounding("\"").trim()
+                    if (clean.isNotEmpty() && !textures.contains(clean)) {
+                        textures.add(clean)
+                    }
                 }
             }
         }
-        return null
+        return textures
     }
 }

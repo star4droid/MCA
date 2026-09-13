@@ -47,7 +47,8 @@ import java.util.UUID
 
 enum class StudioObjectType {
     CHARACTER,
-    BLOCK
+    BLOCK,
+    OBJECT
 }
 
 @Composable
@@ -104,6 +105,53 @@ fun AiAnimationStudioScreen(
         AiChatHistoryRepository.saveSessions(context, updatedList)
     }
 
+    fun clearStudioPreview() {
+        // Remove all nodes that are not Camera, Light, or Ground
+        val idsToRemove = studioSceneGraph.nodes.values
+            .filter { it.type != SceneNodeType.CAMERA && it.type != SceneNodeType.LIGHT && it.type != SceneNodeType.GROUND }
+            .map { it.id }
+        for (id in idsToRemove) {
+            studioSceneGraph.removeNode(id)
+        }
+        activePreviewTimeline = null
+        isStudioPlaying = false
+        studioTime = 0f
+        studioSceneGraph.updateWorldMatrices()
+    }
+
+    fun showObjResult(name: String, objContent: String, colorHex: String?, textureId: String?) {
+        // Requirement: "clear preview in it, when click show the result, clear the preview and show it"
+        clearStudioPreview()
+
+        try {
+            val tempFile = java.io.File(context.cacheDir, "preview_model_${System.currentTimeMillis()}.obj")
+            tempFile.writeText(objContent)
+            val node = com.star4droid.mc.animation.utils.ObjImporter.parseObjFile(tempFile)
+            node.name = name
+            if (!colorHex.isNullOrBlank()) {
+                val parsedColor = try {
+                    android.graphics.Color.parseColor(colorHex)
+                } catch (e: Exception) {
+                    0xFF38BDF8.toInt()
+                }
+                node.material = node.material.copy(color = parsedColor)
+            }
+            if (!textureId.isNullOrBlank()) {
+                node.material = node.material.copy(textureAssetId = textureId)
+            }
+            val heightOffset = (node.boxDimensions.y * 0.5f).coerceAtLeast(0.4f)
+            node.baseTransform = Transform(position = Vec3(0f, heightOffset, 0f))
+            node.animatedTransform = Transform(position = Vec3(0f, heightOffset, 0f))
+            studioSceneGraph.addNode(node)
+            studioSceneGraph.updateWorldMatrices()
+            viewModel.camera.target = Vec3(0f, heightOffset, 0f)
+            val maxSpan = maxOf(node.boxDimensions.x, node.boxDimensions.y, node.boxDimensions.z)
+            viewModel.camera.distance = (maxSpan * 2.2f).coerceIn(2.5f, 6.0f)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
     fun setupStudioScene(type: StudioObjectType) {
         studioSceneGraph.nodes.clear()
         studioSceneGraph.rootNodeIds.clear()
@@ -139,7 +187,7 @@ fun AiAnimationStudioScreen(
                 skinId = "steve",
                 position = Vec3(0f, 0f, 0f)
             )
-        } else {
+        } else if (type == StudioObjectType.BLOCK) {
             val blockNode = SceneNode(
                 id = UUID.randomUUID().toString(),
                 name = "Block",
@@ -151,6 +199,7 @@ fun AiAnimationStudioScreen(
             )
             studioSceneGraph.addNode(blockNode)
         }
+        // If OBJECT, start empty with ground, waiting for AI generation or loaded object
 
         // Ground Grid Platform
         val ground = SceneNode(
@@ -250,30 +299,56 @@ fun AiAnimationStudioScreen(
 
         scope.launch {
             try {
-                val jsonResult = GeminiApiService.generateAnimation(
-                    context = context,
-                    prompt = prompt,
-                    targetType = objectType.name,
-                    previousAnimationJson = lastAnimationJson,
-                    chatHistory = messages
-                )
-                lastAnimationJson = jsonResult
+                if (objectType == StudioObjectType.OBJECT) {
+                    val result = GeminiApiService.generate3DObject(
+                        context = context,
+                        prompt = prompt,
+                        chatHistory = messages
+                    )
+                    val aiMsg = AiChatMessage(
+                        sender = "AI",
+                        text = "Generated 3D object '${result.name}'. ${result.description}",
+                        objContent = result.objContent,
+                        objName = result.name,
+                        objColorHex = result.colorHex,
+                        objTextureId = result.suggestedTexture
+                    )
+                    val newList = messages + userMsg + aiMsg
+                    updateCurrentMessages(newList)
 
-                val aiMsg = AiChatMessage(
-                    sender = "AI",
-                    text = "Created animation based on '$prompt'. Tap below to play!",
-                    animationJson = jsonResult,
-                    animationName = "AI: $prompt"
-                )
-                val newList = messages + userMsg + aiMsg
-                updateCurrentMessages(newList)
+                    // Auto preview: clear preview first and show result!
+                    showObjResult(result.name, result.objContent, result.colorHex, result.suggestedTexture)
+                } else {
+                    val jsonResult = GeminiApiService.generateAnimation(
+                        context = context,
+                        prompt = prompt,
+                        targetType = objectType.name,
+                        previousAnimationJson = lastAnimationJson,
+                        chatHistory = messages
+                    )
+                    lastAnimationJson = jsonResult
 
-                // Auto Play on preview
-                playPreviewAnimation(jsonResult)
+                    val aiMsg = AiChatMessage(
+                        sender = "AI",
+                        text = "Created animation based on '$prompt'. Tap below to play!",
+                        animationJson = jsonResult,
+                        animationName = "AI: $prompt"
+                    )
+                    val newList = messages + userMsg + aiMsg
+                    updateCurrentMessages(newList)
+
+                    // Auto Play on preview
+                    playPreviewAnimation(jsonResult)
+                }
             } catch (e: Exception) {
+                val errText = if (e.message?.contains("timeout", ignoreCase = true) == true) {
+                    "Request timed out. Please check your network connection and try again."
+                } else {
+                    "Failed to generate ${if (objectType == StudioObjectType.OBJECT) "object" else "animation"}: ${e.message}"
+                }
                 val errList = messages + userMsg + AiChatMessage(
                     sender = "AI",
-                    text = "Failed to generate animation: ${e.message}"
+                    text = errText
                 )
                 updateCurrentMessages(errList)
             } finally {
@@ -286,14 +361,14 @@ fun AiAnimationStudioScreen(
         // 1. Dedicated Isolated Studio 3D Viewport
         Viewport3D(viewModel = viewModel, sceneGraph = studioSceneGraph, modifier = Modifier.fillMaxSize())
 
-        // Replay Button Overlay (Top Left of Viewport)
+        // Replay & Clear Preview Buttons Overlay (Top Left of Viewport)
         Surface(
             shape = RoundedCornerShape(8.dp),
             color = Color(0xCC0F172A),
             modifier = Modifier.align(Alignment.TopStart).padding(start = 12.dp, top = 90.dp)
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(
@@ -307,8 +382,19 @@ fun AiAnimationStudioScreen(
                 ) {
                     Icon(Icons.Default.Replay, contentDescription = "Replay Preview", tint = Color(0xFF38BDF8))
                 }
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(if (isStudioPlaying) "Playing Preview..." else "Replay Preview", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.SemiBold)
+                Text(if (isStudioPlaying) "Playing..." else "Replay", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.SemiBold)
+
+                Spacer(modifier = Modifier.width(6.dp))
+                Box(modifier = Modifier.width(1.dp).height(16.dp).background(Color(0xFF334155)))
+                Spacer(modifier = Modifier.width(6.dp))
+
+                IconButton(
+                    onClick = { clearStudioPreview() },
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(Icons.Default.LayersClear, contentDescription = "Clear Preview", tint = Color(0xFFEF4444))
+                }
+                Text("Clear", fontSize = 11.sp, color = Color(0xFFEF4444), fontWeight = FontWeight.SemiBold)
             }
         }
 
@@ -334,7 +420,7 @@ fun AiAnimationStudioScreen(
                         Text("AI Studio", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color.White)
                     }
 
-                    // Character vs Block Top Switcher
+                    // Mode Switcher: Icons only without text, show text for selected only!
                     Row(
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
@@ -342,29 +428,61 @@ fun AiAnimationStudioScreen(
                             .padding(3.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        // Character
                         Surface(
                             onClick = { objectType = StudioObjectType.CHARACTER },
                             shape = RoundedCornerShape(6.dp),
                             color = if (objectType == StudioObjectType.CHARACTER) Color(0xFF8B5CF6) else Color.Transparent
                         ) {
-                            Row(modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.Person, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Character", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.Person, contentDescription = "Character", tint = Color.White, modifier = Modifier.size(16.dp))
+                                if (objectType == StudioObjectType.CHARACTER) {
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Character", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                                }
                             }
                         }
 
-                        Spacer(modifier = Modifier.width(4.dp))
+                        Spacer(modifier = Modifier.width(2.dp))
 
+                        // Block
                         Surface(
                             onClick = { objectType = StudioObjectType.BLOCK },
                             shape = RoundedCornerShape(6.dp),
                             color = if (objectType == StudioObjectType.BLOCK) Color(0xFF10B981) else Color.Transparent
                         ) {
-                            Row(modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.Extension, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Block", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.Extension, contentDescription = "Block", tint = Color.White, modifier = Modifier.size(16.dp))
+                                if (objectType == StudioObjectType.BLOCK) {
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Block", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.width(2.dp))
+
+                        // Object (OBJ Creation Mode)
+                        Surface(
+                            onClick = { objectType = StudioObjectType.OBJECT },
+                            shape = RoundedCornerShape(6.dp),
+                            color = if (objectType == StudioObjectType.OBJECT) Color(0xFFF59E0B) else Color.Transparent
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.Category, contentDescription = "Object", tint = Color.White, modifier = Modifier.size(16.dp))
+                                if (objectType == StudioObjectType.OBJECT) {
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Object", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                                }
                             }
                         }
                     }
@@ -457,6 +575,35 @@ fun AiAnimationStudioScreen(
                     )
                     statusMessage = "Saved block preset successfully!"
                 },
+                onShowObjResult = { name, objContent, colorHex, tex ->
+                    showObjResult(name, objContent, colorHex, tex)
+                },
+                onSaveObj = { name, objContent, colorHex, tex ->
+                    com.star4droid.mc.animation.objects.SavedObjectsRepository.saveObject(
+                        context = context,
+                        name = name,
+                        objContent = objContent,
+                        colorHex = colorHex,
+                        textureAssetId = tex
+                    )
+                    android.widget.Toast.makeText(context, "Saved '$name' to Saved Objects!", android.widget.Toast.LENGTH_SHORT).show()
+                },
+                onAddToScene = { name, objContent, colorHex, tex ->
+                    try {
+                        val saved = com.star4droid.mc.animation.objects.SavedObjectsRepository.saveObject(
+                            context = context,
+                            name = name,
+                            objContent = objContent,
+                            colorHex = colorHex,
+                            textureAssetId = tex
+                        )
+                        viewModel.importObjFile(java.io.File(saved.objFilePath))
+                        android.widget.Toast.makeText(context, "Added '$name' to your scene!", android.widget.Toast.LENGTH_SHORT).show()
+                    } catch (e: Exception) {
+                        android.widget.Toast.makeText(context, "Failed to add to scene: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                },
+                isObjectMode = (objectType == StudioObjectType.OBJECT),
                 onNewChat = { startNewChat() },
                 onClearChat = {
                     updateCurrentMessages(emptyList())

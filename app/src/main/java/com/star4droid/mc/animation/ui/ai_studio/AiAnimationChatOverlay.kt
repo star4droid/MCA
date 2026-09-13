@@ -1,6 +1,7 @@
 package com.star4droid.mc.animation.ui.ai_studio
 
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -30,6 +31,10 @@ data class AiChatMessage(
     val text: String,
     val animationJson: String? = null,
     val animationName: String? = null,
+    val objContent: String? = null,
+    val objName: String? = null,
+    val objColorHex: String? = null,
+    val objTextureId: String? = null,
     val timestamp: Long = System.currentTimeMillis()
 )
 
@@ -40,6 +45,10 @@ fun AiAnimationChatOverlay(
     onSendMessage: (String) -> Unit,
     onPlayAnimation: (String) -> Unit,
     onSaveCustomBlock: (name: String, json: String) -> Unit,
+    onShowObjResult: (name: String, objContent: String, colorHex: String?, textureId: String?) -> Unit = { _, _, _, _ -> },
+    onSaveObj: (name: String, objContent: String, colorHex: String?, textureId: String?) -> Unit = { _, _, _, _ -> },
+    onAddToScene: ((name: String, objContent: String, colorHex: String?, textureId: String?) -> Unit)? = null,
+    isObjectMode: Boolean = false,
     onNewChat: () -> Unit,
     onClearChat: () -> Unit,
     onOpenHistory: () -> Unit,
@@ -207,6 +216,107 @@ fun AiAnimationChatOverlay(
                                     }
                                 }
 
+                                // Interactive Generated OBJ Card
+                                if (!msg.objContent.isNullOrBlank()) {
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = Color(0xFF1E293B),
+                                        border = BorderStroke(1.dp, Color(0xFFF59E0B)),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Column(modifier = Modifier.padding(8.dp)) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Icon(Icons.Default.Category, contentDescription = null, tint = Color(0xFFF59E0B), modifier = Modifier.size(18.dp))
+                                                    Spacer(modifier = Modifier.width(4.dp))
+                                                    Text(
+                                                        msg.objName ?: "3D Object Created",
+                                                        fontWeight = FontWeight.Bold,
+                                                        fontSize = 11.sp,
+                                                        color = Color(0xFFFCD34D)
+                                                    )
+                                                }
+                                                if (!msg.objColorHex.isNullOrBlank()) {
+                                                    Surface(
+                                                        shape = CircleShape,
+                                                        color = try { Color(android.graphics.Color.parseColor(msg.objColorHex)) } catch (e: Exception) { Color(0xFFF59E0B) },
+                                                        modifier = Modifier.size(12.dp)
+                                                    ) {}
+                                                }
+                                            }
+
+                                            Spacer(modifier = Modifier.height(6.dp))
+
+                                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                Button(
+                                                    onClick = {
+                                                        onShowObjResult(
+                                                            msg.objName ?: "Object",
+                                                            msg.objContent,
+                                                            msg.objColorHex,
+                                                            msg.objTextureId
+                                                        )
+                                                        onCloseChat()
+                                                    },
+                                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF59E0B)),
+                                                    shape = RoundedCornerShape(6.dp),
+                                                    modifier = Modifier.height(28.dp),
+                                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                                                ) {
+                                                    Icon(Icons.Default.Visibility, contentDescription = null, modifier = Modifier.size(12.dp), tint = Color.Black)
+                                                    Spacer(modifier = Modifier.width(2.dp))
+                                                    Text("Preview", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+                                                }
+
+                                                if (onAddToScene != null) {
+                                                    Button(
+                                                        onClick = {
+                                                            onAddToScene(
+                                                                msg.objName ?: "Object",
+                                                                msg.objContent,
+                                                                msg.objColorHex,
+                                                                msg.objTextureId
+                                                            )
+                                                        },
+                                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                                                        shape = RoundedCornerShape(6.dp),
+                                                        modifier = Modifier.height(28.dp),
+                                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                                                    ) {
+                                                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(12.dp), tint = Color.White)
+                                                        Spacer(modifier = Modifier.width(2.dp))
+                                                        Text("Add to Scene", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                                    }
+                                                }
+
+                                                OutlinedButton(
+                                                    onClick = {
+                                                        onSaveObj(
+                                                            msg.objName ?: "Saved Object",
+                                                            msg.objContent,
+                                                            msg.objColorHex,
+                                                            msg.objTextureId
+                                                        )
+                                                    },
+                                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF38BDF8)),
+                                                    shape = RoundedCornerShape(6.dp),
+                                                    modifier = Modifier.height(28.dp),
+                                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
+                                                ) {
+                                                    Icon(Icons.Default.Bookmark, contentDescription = null, modifier = Modifier.size(12.dp))
+                                                    Spacer(modifier = Modifier.width(2.dp))
+                                                    Text("Save", fontSize = 9.sp)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
                                 // Retry Button under AI Messages
                                 if (!isUser) {
                                     Spacer(modifier = Modifier.height(4.dp))
@@ -256,7 +366,11 @@ fun AiAnimationChatOverlay(
                                 modifier = Modifier.size(22.dp).rotate(starRotation)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Gemini AI is crafting your animation...", fontSize = 11.sp, color = Color(0xFFCBD5E1))
+                            Text(
+                                if (isObjectMode) "Gemini AI is generating your 3D model..." else "Gemini AI is crafting your animation...",
+                                fontSize = 11.sp,
+                                color = Color(0xFFCBD5E1)
+                            )
                         }
                     }
                 }
@@ -273,7 +387,13 @@ fun AiAnimationChatOverlay(
                 OutlinedTextField(
                     value = inputText,
                     onValueChange = { inputText = it },
-                    placeholder = { Text("Ask AI to create or edit animation...", fontSize = 11.sp, color = Color(0xFF64748B)) },
+                    placeholder = {
+                        Text(
+                            if (isObjectMode) "Describe a 3D object (e.g. diamond sword, chest, chair)..." else "Ask AI to create or edit animation...",
+                            fontSize = 11.sp,
+                            color = Color(0xFF64748B)
+                        )
+                    },
                     singleLine = true,
                     modifier = Modifier.weight(1f).height(44.dp),
                     colors = OutlinedTextFieldDefaults.colors(

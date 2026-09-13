@@ -44,6 +44,10 @@ object AiChatHistoryRepository {
                             text = mObj.optString("text", ""),
                             animationJson = mObj.optString("animationJson").ifEmpty { null },
                             animationName = mObj.optString("animationName").ifEmpty { null },
+                            objContent = mObj.optString("objContent").ifEmpty { null },
+                            objName = mObj.optString("objName").ifEmpty { null },
+                            objColorHex = mObj.optString("objColorHex").ifEmpty { null },
+                            objTextureId = mObj.optString("objTextureId").ifEmpty { null },
                             timestamp = mObj.optLong("timestamp", System.currentTimeMillis())
                         )
                     )
@@ -80,6 +84,10 @@ object AiChatHistoryRepository {
                             put("text", msg.text)
                             msg.animationJson?.let { put("animationJson", it) }
                             msg.animationName?.let { put("animationName", it) }
+                            msg.objContent?.let { put("objContent", it) }
+                            msg.objName?.let { put("objName", it) }
+                            msg.objColorHex?.let { put("objColorHex", it) }
+                            msg.objTextureId?.let { put("objTextureId", it) }
                             put("timestamp", msg.timestamp)
                         })
                     }

@@ -46,6 +46,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.star4droid.mc.animation.export.Mp4ExportConfig
 import com.star4droid.mc.animation.export.Mp4Exporter
 import java.io.File
@@ -101,6 +102,9 @@ data class EditorUiState(
     val pickerPickedPosition: Vec3 = Vec3.ZERO,
     val prePickerSelectionLocked: Boolean = false,
     val saveMessage: String? = null,
+    val isLoadingModels: Boolean = false,
+    val isCameraControlActive: Boolean = false,
+    val isSavedObjectsOpen: Boolean = false,
     val version: Long = 0L // Incremented to trigger Compose recomposition
 )
 
@@ -170,12 +174,55 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
                 projectId = projectId,
                 projectName = loaded.metadata.name,
                 activeTimelineId = activeTlId,
-                selectedNodeId = sceneGraph.rootNodeIds.firstOrNull(),
+                selectedNodeId = null,
                 scenes = scenesList.toList(),
                 activeSceneId = scenesList[0].id,
                 version = System.currentTimeMillis()
             )
             updateRendererSelectedNode()
+            loadProjectObjModels(projectId, loaded.metadata.name)
+        }
+    }
+
+    private fun loadProjectObjModels(projectId: String, projectName: String) {
+        val nodesToLoad = sceneGraph.nodes.values.filter { it.objFilePath != null && it.objModelData == null }
+        if (nodesToLoad.isEmpty()) return
+
+        _uiState.value = _uiState.value.copy(isLoadingModels = true)
+        viewModelScope.launch(Dispatchers.IO) {
+            val projectDir = projectRepository.getProjectDir(projectId, projectName)
+            for (node in nodesToLoad) {
+                try {
+                    val path = node.objFilePath ?: continue
+                    var file = if (path.startsWith("/")) File(path) else File(projectDir, path)
+                    if (!file.exists()) {
+                        val inModels = File(File(projectDir, "models"), File(path).name)
+                        if (inModels.exists()) {
+                            file = inModels
+                        } else {
+                            val inSaved = com.star4droid.mc.animation.objects.SavedObjectsRepository.findObjFileByName(getApplication(), File(path).name)
+                            if (inSaved != null && inSaved.exists()) {
+                                file = inSaved
+                            }
+                        }
+                    }
+                    if (file.exists()) {
+                        val parsed = com.star4droid.mc.animation.utils.ObjImporter.parseObjFile(file)
+                        node.objModelData = parsed.objModelData
+                        node.boxDimensions = parsed.boxDimensions
+                        if (parsed.material.textureAssetId.isNotEmpty() && parsed.material.textureAssetId != "stone") {
+                            node.material = parsed.material
+                        }
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+            withContext(Dispatchers.Main) {
+                _uiState.value = _uiState.value.copy(isLoadingModels = false, version = System.currentTimeMillis())
+                evaluateAnimation(_uiState.value.currentTime)
+                triggerRecomposition()
+            }
         }
     }
 
@@ -189,6 +236,12 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
             version = System.currentTimeMillis()
         )
         updateRendererSelectedNode()
+        if (nodeId != null) {
+            val node = sceneGraph.getNode(nodeId)
+            if (node != null) {
+                camera.target = node.getWorldPosition()
+            }
+        }
     }
 
     fun toggleSelectionLock() {
@@ -744,16 +797,120 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
     fun importObjFile(file: java.io.File) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val node = com.star4droid.mc.animation.utils.ObjImporter.parseObjFile(file)
-                kotlinx.coroutines.withContext(Dispatchers.Main) {
+                withContext(Dispatchers.Main) {
+                    _uiState.value = _uiState.value.copy(isLoadingModels = true)
+                }
+                val projectDir = projectRepository.getProjectDir(_uiState.value.projectId, _uiState.value.projectName)
+                val modelsDir = File(projectDir, "models").apply { if (!exists()) mkdirs() }
+                val destObjFile = File(modelsDir, file.name)
+                try {
+                    file.copyTo(destObjFile, overwrite = true)
+                } catch (e: Exception) {}
+
+                // Also copy accompanying mtl and texture files from parent folder into modelsDir
+                val parent = file.parentFile
+                if (parent != null && parent.absolutePath != modelsDir.absolutePath) {
+                    parent.listFiles()?.forEach { sibling ->
+                        val ext = sibling.extension.lowercase()
+                        if (ext in listOf("mtl", "png", "jpg", "jpeg", "webp")) {
+                            try {
+                                sibling.copyTo(File(modelsDir, sibling.name), overwrite = true)
+                            } catch (e: Exception) {}
+                        }
+                    }
+                }
+
+                val targetFile = if (destObjFile.exists()) destObjFile else file
+                val node = com.star4droid.mc.animation.utils.ObjImporter.parseObjFile(targetFile)
+                node.objFilePath = if (destObjFile.exists()) "models/${destObjFile.name}" else file.absolutePath
+
+                withContext(Dispatchers.Main) {
                     sceneGraph.addNode(node)
                     selectNode(node.id)
                     SoundPlayer.playSound(SoundPlayer.SoundType.STEP)
                     saveProject()
+                    _uiState.value = _uiState.value.copy(isLoadingModels = false)
                     triggerRecomposition()
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
+                withContext(Dispatchers.Main) {
+                    _uiState.value = _uiState.value.copy(isLoadingModels = false)
+                }
+            }
+        }
+    }
+
+    fun toggleCameraControl() {
+        val current = _uiState.value.isCameraControlActive
+        _uiState.value = _uiState.value.copy(isCameraControlActive = !current)
+    }
+
+    fun setCameraControlActive(active: Boolean) {
+        _uiState.value = _uiState.value.copy(isCameraControlActive = active)
+    }
+
+    fun openSavedObjects() {
+        _uiState.value = _uiState.value.copy(isSavedObjectsOpen = true)
+    }
+
+    fun closeSavedObjects() {
+        _uiState.value = _uiState.value.copy(isSavedObjectsOpen = false)
+    }
+
+    fun addSavedObjectToScene(savedItem: com.star4droid.mc.animation.objects.SavedObjectItem) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                _uiState.value = _uiState.value.copy(isLoadingModels = true)
+                val projectDir = projectRepository.getProjectDir(_uiState.value.projectId, _uiState.value.projectName)
+                val modelsDir = File(projectDir, "models").apply { if (!exists()) mkdirs() }
+
+                val srcFile = File(savedItem.objFilePath)
+                if (!srcFile.exists()) {
+                    withContext(Dispatchers.Main) {
+                        _uiState.value = _uiState.value.copy(isLoadingModels = false)
+                    }
+                    return@launch
+                }
+
+                val destObjFile = File(modelsDir, "${savedItem.id}_${srcFile.name}")
+                srcFile.copyTo(destObjFile, overwrite = true)
+
+                // Copy texture if any
+                if (!savedItem.texturePath.isNullOrBlank()) {
+                    val srcTex = File(savedItem.texturePath)
+                    if (srcTex.exists()) {
+                        srcTex.copyTo(File(modelsDir, srcTex.name), overwrite = true)
+                    }
+                }
+
+                val node = com.star4droid.mc.animation.utils.ObjImporter.parseObjFile(destObjFile)
+                node.name = savedItem.name
+                node.objFilePath = "models/${destObjFile.name}"
+                if (!savedItem.colorHex.isNullOrBlank()) {
+                    try {
+                        val parsedColor = android.graphics.Color.parseColor(savedItem.colorHex)
+                        node.material = node.material.copy(color = parsedColor)
+                    } catch (e: Exception) {}
+                }
+
+                // Spawn at camera target or ground
+                node.baseTransform = Transform(position = camera.target)
+                node.animatedTransform = Transform(position = camera.target)
+
+                withContext(Dispatchers.Main) {
+                    sceneGraph.addNode(node)
+                    selectNode(node.id)
+                    SoundPlayer.playSound(SoundPlayer.SoundType.STEP)
+                    saveProject()
+                    _uiState.value = _uiState.value.copy(isLoadingModels = false, isSavedObjectsOpen = false)
+                    triggerRecomposition()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                withContext(Dispatchers.Main) {
+                    _uiState.value = _uiState.value.copy(isLoadingModels = false)
+                }
             }
         }
     }

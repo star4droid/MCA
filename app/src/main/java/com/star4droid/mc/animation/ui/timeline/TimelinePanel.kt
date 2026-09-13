@@ -136,7 +136,15 @@ fun getActionBlockColor(type: ActionBlockType): Color = when (type) {
     ActionBlockType.SPIN_ATTACK -> Color(0xFFF472B6)
     ActionBlockType.BLOCK_SHIELD -> Color(0xFF60A5FA)
     ActionBlockType.TAUNT -> Color(0xFFFBCFE8)
+    ActionBlockType.CIRCLE_WALK -> Color(0xFF06B6D4)
+    ActionBlockType.SLEEPY -> Color(0xFFA78BFA)
+    ActionBlockType.PATROL -> Color(0xFF3B82F6)
+    ActionBlockType.SWORD_ATTACK -> Color(0xFFF43F5E)
     ActionBlockType.DISABLE_CAMERA -> Color(0xFF475569)
+    ActionBlockType.CONVERSATION -> Color(0xFF8B5CF6)
+    ActionBlockType.FARMING -> Color(0xFF10B981)
+    ActionBlockType.EATING -> Color(0xFFF97316)
+    ActionBlockType.LOOK_AROUND -> Color(0xFF06B6D4)
 }
 
 fun getActionBlockIcon(type: ActionBlockType): ImageVector = when (type) {
@@ -170,7 +178,15 @@ fun getActionBlockIcon(type: ActionBlockType): ImageVector = when (type) {
     ActionBlockType.SPIN_ATTACK -> Icons.Default.RotateLeft
     ActionBlockType.BLOCK_SHIELD -> Icons.Default.Shield
     ActionBlockType.TAUNT -> Icons.Default.EmojiEmotions
+    ActionBlockType.CIRCLE_WALK -> Icons.Default.RotateRight
+    ActionBlockType.SLEEPY -> Icons.Default.Face
+    ActionBlockType.PATROL -> Icons.Default.Shield
+    ActionBlockType.SWORD_ATTACK -> Icons.Default.SportsKabaddi
     ActionBlockType.DISABLE_CAMERA -> Icons.Default.VideocamOff
+    ActionBlockType.CONVERSATION -> Icons.Default.EmojiEmotions
+    ActionBlockType.FARMING -> Icons.Default.Accessibility
+    ActionBlockType.EATING -> Icons.Default.ThumbUp
+    ActionBlockType.LOOK_AROUND -> Icons.Default.Visibility
 }
 
 @Composable
@@ -216,14 +232,13 @@ fun TimelinePanel(
     val dpPerSecond = 80.dp
     val totalTimelineWidth = dpPerSecond * duration
 
-    // REQUIREMENT 4: Filter action blocks by selected item so each object has separate blocks!
-    // NOTE: Do NOT use remember() here - we need live snapshot for instant rendering of new blocks
+    // Filter action blocks by selected item so each object has strictly separate blocks!
+    // When nothing is selected, blocks is empty and Add Block button is disabled.
     val allBlocks = timeline?.actionBlocks?.toList() ?: emptyList()
     val blocks = if (selectedNodeId == null) {
-        allBlocks
+        emptyList()
     } else {
-        val filtered = allBlocks.filter { it.targetNodeId == selectedNodeId }
-        if (filtered.isNotEmpty()) filtered else allBlocks.filter { it.targetNodeId.isEmpty() }
+        allBlocks.filter { it.targetNodeId == selectedNodeId }
     }
     val maxRow = (blocks.maxOfOrNull { it.trackRow } ?: 2).coerceAtLeast(3)
     val density = LocalDensity.current
@@ -303,11 +318,16 @@ fun TimelinePanel(
                 )
             }
 
-            // Add Action Block Button
+            // Add Action Block Button (Disabled when no item is selected)
             Box {
                 Button(
                     onClick = { addBlockMenuOpen = true },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+                    enabled = selectedNodeId != null,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF2563EB),
+                        disabledContainerColor = Color(0xFF334155),
+                        disabledContentColor = Color(0xFF64748B)
+                    ),
                     modifier = Modifier.height(28.dp),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                 ) {
@@ -527,6 +547,31 @@ fun TimelinePanel(
                                     .height(1.dp)
                                     .background(Color(0xFF1E293B))
                             )
+                        }
+
+                        if (selectedNodeId == null) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(100.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        Icons.Default.NearMe,
+                                        contentDescription = null,
+                                        tint = Color(0xFF64748B),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        "Select an object in the 3D scene to view and add animation blocks",
+                                        color = Color(0xFF64748B),
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
                         }
 
                         blocks.forEach { block ->

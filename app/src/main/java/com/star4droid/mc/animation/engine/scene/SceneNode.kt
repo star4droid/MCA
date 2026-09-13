@@ -20,7 +20,8 @@ data class SceneNode(
     var lightData: LightData? = null,
     var boxDimensions: Vec3 = Vec3.ONE,
     var characterSkinId: String = "steve",
-    var objModelData: com.star4droid.mc.animation.utils.ObjModelData? = null
+    var objModelData: com.star4droid.mc.animation.utils.ObjModelData? = null,
+    var objFilePath: String? = null
 ) {
     fun getWorldPosition(): Vec3 {
         return Vec3(worldMatrix[12], worldMatrix[13], worldMatrix[14])
@@ -37,9 +38,9 @@ data class SceneNode(
         val scaleZ = Vec3(worldMatrix[8], worldMatrix[9], worldMatrix[10]).length()
 
         val half = Vec3(
-            (boxDimensions.x * scaleX * 0.5f).coerceAtLeast(0.00001f),
-            (boxDimensions.y * scaleY * 0.5f).coerceAtLeast(0.00001f),
-            (boxDimensions.z * scaleZ * 0.5f).coerceAtLeast(0.00001f)
+            (boxDimensions.x * scaleX * 0.5f).coerceAtLeast(0.2f),
+            (boxDimensions.y * scaleY * 0.5f).coerceAtLeast(0.2f),
+            (boxDimensions.z * scaleZ * 0.5f).coerceAtLeast(0.2f)
         )
         return Pair(pos - half, pos + half)
     }
@@ -56,7 +57,9 @@ data class SceneNode(
             material = material.copy(),
             cameraData = cameraData?.copy(),
             lightData = lightData?.copy(),
-            boxDimensions = boxDimensions.copy()
+            boxDimensions = boxDimensions.copy(),
+            objModelData = objModelData,
+            objFilePath = objFilePath
         )
     }
 }
