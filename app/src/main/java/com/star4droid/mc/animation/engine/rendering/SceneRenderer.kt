@@ -35,6 +35,7 @@ class SceneRenderer(
     private var wireframeMesh: Mesh? = null
     private var cameraFrustumMesh: Mesh? = null
     private val textureManager = TextureManager()
+    private val objMeshCache = mutableMapOf<String, Mesh>()
 
     var viewportWidth: Int = 1
         private set
@@ -259,7 +260,11 @@ class SceneRenderer(
                     GLES20.glDisable(GLES20.GL_BLEND)
                 }
 
+                val objData = node.objModelData
                 val meshToDraw = when {
+                    objData != null && objData.triangles.isNotEmpty() -> {
+                        objMeshCache.getOrPut(node.id) { Geometry.createObjMesh(objData) }
+                    }
                     node.type == SceneNodeType.PLANE && planeMesh != null -> planeMesh!!
                     node.characterPartType == CharacterPartType.HEAD && headMesh != null -> headMesh!!
                     else -> cube

@@ -56,7 +56,8 @@ data class ActionBlock(
     var clipFileName: String? = null,
     var angle: Float = 90f,
     var jumpHeight: Float = 1.5f,
-    var amplitude: Float = 1.0f
+    var amplitude: Float = 1.0f,
+    var customJson: String? = null
 ) {
     fun copyBlock(): ActionBlock = copy(id = UUID.randomUUID().toString())
 }

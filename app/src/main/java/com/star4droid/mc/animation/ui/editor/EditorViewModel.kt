@@ -26,6 +26,7 @@ import com.star4droid.mc.animation.engine.history.TransformCommand
 import com.star4droid.mc.animation.engine.math.Vec3
 import com.star4droid.mc.animation.engine.rendering.SceneRenderer
 import com.star4droid.mc.animation.engine.scene.CameraData
+import com.star4droid.mc.animation.engine.scene.CharacterPartType
 import com.star4droid.mc.animation.engine.scene.LightData
 import com.star4droid.mc.animation.engine.scene.Material
 import com.star4droid.mc.animation.engine.scene.SceneGraph
@@ -35,6 +36,7 @@ import com.star4droid.mc.animation.engine.scene.TimeOfDay
 import com.star4droid.mc.animation.engine.scene.Transform
 import com.star4droid.mc.animation.project.ProjectMetadata
 import com.star4droid.mc.animation.project.ProjectRepository
+import com.star4droid.mc.animation.ui.blocks.CustomBlockPreset
 import com.star4droid.mc.animation.ui.world.WorldBuildingTool
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -516,6 +518,92 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
             SoundPlayer.playSound(SoundPlayer.SoundType.WHOOSH)
             evaluateAnimation(_uiState.value.currentTime)
             triggerRecomposition()
+        }
+    }
+
+    private fun resolveTargetNodeId(targetNodeName: String, selectedId: String): String {
+        if (targetNodeName.isBlank()) return selectedId
+        if (sceneGraph.nodes.containsKey(targetNodeName)) return targetNodeName
+
+        val norm = targetNodeName.replace("_", "").replace(" ", "").lowercase()
+
+        val partTypeFromAlias = when (norm) {
+            "head" -> CharacterPartType.HEAD
+            "body", "torso" -> CharacterPartType.BODY
+            "root" -> CharacterPartType.ROOT
+            "rightarm", "rightupperarm" -> CharacterPartType.RIGHT_ARM
+            "rightforearm", "righthand", "rightelbow" -> CharacterPartType.RIGHT_FOREARM
+            "leftarm", "leftupperarm" -> CharacterPartType.LEFT_ARM
+            "leftforearm", "lefthand", "leftelbow" -> CharacterPartType.LEFT_FOREARM
+            "rightleg", "rightthigh", "rightupperleg" -> CharacterPartType.RIGHT_LEG
+            "rightlowerleg", "rightcalf", "rightknee", "rightshin" -> CharacterPartType.RIGHT_LOWER_LEG
+            "leftleg", "leftthigh", "leftupperleg" -> CharacterPartType.LEFT_LEG
+            "leftlowerleg", "leftcalf", "leftknee", "leftshin" -> CharacterPartType.LEFT_LOWER_LEG
+            else -> null
+        }
+
+        if (partTypeFromAlias != null) {
+            val matched = sceneGraph.nodes.values.firstOrNull { it.characterPartType == partTypeFromAlias }
+            if (matched != null) return matched.id
+        }
+
+        val byName = sceneGraph.nodes.values.firstOrNull { 
+            it.name.replace("_", "").replace(" ", "").lowercase().contains(norm) 
+        }
+        if (byName != null) return byName.id
+
+        return selectedId
+    }
+
+    fun applyCustomBlockPreset(preset: CustomBlockPreset) {
+        val selectedId = _uiState.value.selectedNodeId ?: sceneGraph.nodes.keys.firstOrNull() ?: return
+        val activeTl = getActiveTimeline() ?: return
+        try {
+            val json = org.json.JSONObject(preset.jsonContent)
+            val startTime = _uiState.value.currentTime
+
+            var maxDuration = 2.0f
+            if (json.has("duration")) {
+                maxDuration = json.optDouble("duration", 2.0).toFloat().coerceAtLeast(0.5f)
+            }
+
+            if (json.has("tracks")) {
+                val tracksArray = json.getJSONArray("tracks")
+                for (i in 0 until tracksArray.length()) {
+                    val trackObj = tracksArray.getJSONObject(i)
+                    if (trackObj.has("keyframes")) {
+                        val keyframesArray = trackObj.getJSONArray("keyframes")
+                        for (j in 0 until keyframesArray.length()) {
+                            val kfObj = keyframesArray.getJSONObject(j)
+                            val relTime = kfObj.optDouble("time", 0.0).toFloat()
+                            if (relTime > maxDuration) {
+                                maxDuration = relTime
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Create ActionBlock storing preset keyframe JSON
+            val newBlock = ActionBlock(
+                id = java.util.UUID.randomUUID().toString(),
+                name = preset.name,
+                type = ActionBlockType.ANIMATION_CLIP,
+                targetNodeId = selectedId,
+                startTime = startTime,
+                duration = maxDuration,
+                trackRow = 0,
+                hasCustomSettings = true,
+                customJson = preset.jsonContent
+            )
+            activeTl.addActionBlock(newBlock)
+
+            SoundPlayer.playSound(SoundPlayer.SoundType.WHOOSH)
+            evaluateAnimation(_uiState.value.currentTime)
+            saveProject()
+            triggerRecomposition()
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 

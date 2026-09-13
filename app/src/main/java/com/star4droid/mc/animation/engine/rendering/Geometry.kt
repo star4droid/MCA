@@ -313,4 +313,41 @@ object Geometry {
 
         return Mesh(vBuf, iBuf, indices.size)
     }
+
+    fun createObjMesh(objData: com.star4droid.mc.animation.utils.ObjModelData): Mesh {
+        val triangles = objData.triangles
+        if (triangles.isEmpty()) {
+            return createCubeMesh(1f, 1f, 1f)
+        }
+        val maxTris = triangles.take(15000)
+        val vertexCount = maxTris.size * 3
+        val vertexData = FloatArray(vertexCount * 8)
+        val indexData = ShortArray(vertexCount)
+
+        var vIdx = 0
+        var iIdx = 0
+        for (t in maxTris) {
+            vertexData[vIdx++] = t.v1.x; vertexData[vIdx++] = t.v1.y; vertexData[vIdx++] = t.v1.z
+            vertexData[vIdx++] = t.n1.x; vertexData[vIdx++] = t.n1.y; vertexData[vIdx++] = t.n1.z
+            vertexData[vIdx++] = t.uv1.first; vertexData[vIdx++] = t.uv1.second
+            indexData[iIdx] = iIdx.toShort(); iIdx++
+
+            vertexData[vIdx++] = t.v2.x; vertexData[vIdx++] = t.v2.y; vertexData[vIdx++] = t.v2.z
+            vertexData[vIdx++] = t.n2.x; vertexData[vIdx++] = t.n2.y; vertexData[vIdx++] = t.n2.z
+            vertexData[vIdx++] = t.uv2.first; vertexData[vIdx++] = t.uv2.second
+            indexData[iIdx] = iIdx.toShort(); iIdx++
+
+            vertexData[vIdx++] = t.v3.x; vertexData[vIdx++] = t.v3.y; vertexData[vIdx++] = t.v3.z
+            vertexData[vIdx++] = t.n3.x; vertexData[vIdx++] = t.n3.y; vertexData[vIdx++] = t.n3.z
+            vertexData[vIdx++] = t.uv3.first; vertexData[vIdx++] = t.uv3.second
+            indexData[iIdx] = iIdx.toShort(); iIdx++
+        }
+
+        val vBuf = ByteBuffer.allocateDirect(vertexData.size * 4).order(ByteOrder.nativeOrder()).asFloatBuffer().put(vertexData)
+        vBuf.position(0)
+        val iBuf = ByteBuffer.allocateDirect(indexData.size * 2).order(ByteOrder.nativeOrder()).asShortBuffer().put(indexData)
+        iBuf.position(0)
+
+        return Mesh(vBuf, iBuf, indexData.size)
+    }
 }

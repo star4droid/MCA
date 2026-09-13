@@ -32,7 +32,10 @@ import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.CenterFocusStrong
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DragIndicator
+import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.FolderOpen
+import com.star4droid.mc.animation.ui.ai_studio.AiAnimationStudioScreen
+import com.star4droid.mc.animation.ui.blocks.CustomBlocksManagerDialog
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Lock
@@ -112,6 +115,8 @@ fun EditorScreen(
 
     var addMenuOpen by remember { mutableStateOf(false) }
     var timeOfDayMenuOpen by remember { mutableStateOf(false) }
+    var isAiStudioOpen by remember { mutableStateOf(false) }
+    var isCustomBlocksManagerOpen by remember { mutableStateOf(false) }
     val topBarScrollState = rememberScrollState()
 
     // REQUIREMENT 9: Resizable Panel State Sizes with Default Values
@@ -125,8 +130,14 @@ fun EditorScreen(
     var timelineHeight by remember { mutableStateOf(defaultTimelineHeight) }
     var timelineWidth by remember { mutableStateOf(defaultTimelineWidth) }
 
-    Column(modifier = Modifier.fillMaxSize().background(Color(0xFF0B101B))) {
-        if (!uiState.isWorldBuildingMode) {
+    if (isAiStudioOpen) {
+        AiAnimationStudioScreen(
+            viewModel = viewModel,
+            onBack = { isAiStudioOpen = false }
+        )
+    } else {
+        Column(modifier = Modifier.fillMaxSize().background(Color(0xFF0B101B))) {
+            if (!uiState.isWorldBuildingMode) {
             // 1. Top Bar (Top element in vertical Column layout)
             Row(
                 modifier = Modifier
@@ -171,29 +182,20 @@ fun EditorScreen(
 
                 Spacer(modifier = Modifier.width(8.dp))
 
-                // Screen Rotate Button
-                Surface(
+                // Screen Rotate Icon Button (Icon only)
+                IconButton(
                     onClick = onToggleOrientation,
-                    shape = RoundedCornerShape(6.dp),
-                    color = Color(0xFF334155),
-                    modifier = Modifier.height(30.dp)
+                    modifier = Modifier.size(32.dp)
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(horizontal = 8.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.ScreenRotation,
-                            contentDescription = "Rotate Screen",
-                            tint = Color(0xFF38BDF8),
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Rotate", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.SemiBold)
-                    }
+                    Icon(
+                        Icons.Default.ScreenRotation,
+                        contentDescription = "Rotate Screen",
+                        tint = Color(0xFF38BDF8),
+                        modifier = Modifier.size(18.dp)
+                    )
                 }
 
-                Spacer(modifier = Modifier.width(6.dp))
+                Spacer(modifier = Modifier.width(4.dp))
 
                 // Selection Lock Button
                 IconButton(
@@ -208,9 +210,9 @@ fun EditorScreen(
                     )
                 }
 
-                Spacer(modifier = Modifier.width(6.dp))
+                Spacer(modifier = Modifier.width(4.dp))
 
-                // Transform Modes
+                // Transform Modes (Icon-only)
                 Row(
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
@@ -247,33 +249,37 @@ fun EditorScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(4.dp))
 
-                Button(
+                // Build Mode Icon Button
+                IconButton(
                     onClick = { viewModel.enterWorldBuildingMode() },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
-                    shape = RoundedCornerShape(6.dp),
-                    modifier = Modifier.height(30.dp)
+                    modifier = Modifier.size(32.dp)
                 ) {
-                    Icon(Icons.Default.Build, contentDescription = null, modifier = Modifier.size(14.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Build Mode", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Icon(Icons.Default.Build, contentDescription = "Build Mode", tint = Color(0xFF10B981), modifier = Modifier.size(18.dp))
                 }
 
-                Spacer(modifier = Modifier.width(6.dp))
+                Spacer(modifier = Modifier.width(4.dp))
 
-                Button(
-                    onClick = { viewModel.toggleSideAi() },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8B5CF6)),
-                    shape = RoundedCornerShape(6.dp),
-                    modifier = Modifier.height(30.dp)
+                // AI Studio Launch Icon Button
+                IconButton(
+                    onClick = { isAiStudioOpen = true },
+                    modifier = Modifier.size(32.dp)
                 ) {
-                    Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(14.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("AI Agent", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Icon(Icons.Default.AutoAwesome, contentDescription = "AI Studio", tint = Color(0xFF8B5CF6), modifier = Modifier.size(19.dp))
                 }
 
-                Spacer(modifier = Modifier.width(6.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+
+                // Custom Blocks Manager Icon Button
+                IconButton(
+                    onClick = { isCustomBlocksManagerOpen = true },
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(Icons.Default.Extension, contentDescription = "Custom Blocks Manager", tint = Color(0xFF10B981), modifier = Modifier.size(18.dp))
+                }
+
+                Spacer(modifier = Modifier.width(4.dp))
 
                 IconButton(onClick = { viewModel.toggleFileBrowser() }, modifier = Modifier.size(32.dp)) {
                     Icon(Icons.Default.FolderOpen, contentDescription = "Import Files", tint = Color(0xFF38BDF8), modifier = Modifier.size(18.dp))
@@ -420,15 +426,11 @@ fun EditorScreen(
                     Icon(Icons.Default.Palette, contentDescription = "Assets", tint = Color(0xFF38BDF8), modifier = Modifier.size(18.dp))
                 }
 
-                Button(
+                IconButton(
                     onClick = { viewModel.saveProject() },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF22C55E)),
-                    shape = RoundedCornerShape(6.dp),
-                    modifier = Modifier.height(30.dp)
+                    modifier = Modifier.size(32.dp)
                 ) {
-                    Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(14.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Save", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Icon(Icons.Default.Save, contentDescription = "Save", tint = Color(0xFF22C55E), modifier = Modifier.size(18.dp))
                 }
             }
 
@@ -607,6 +609,7 @@ fun EditorScreen(
                             onExportAnimation = { animName -> viewModel.exportCurrentAnimation(animName) },
                             onImportAnimation = { file -> viewModel.importAnimation(file) },
                             getSavedAnimationFiles = { viewModel.getSavedAnimationFiles() },
+                            onApplyCustomPreset = { preset -> viewModel.applyCustomBlockPreset(preset) },
                             modifier = Modifier.width(timelineWidth).fillMaxHeight(0.85f)
                         )
 
@@ -659,6 +662,7 @@ fun EditorScreen(
                             onExportAnimation = { animName -> viewModel.exportCurrentAnimation(animName) },
                             onImportAnimation = { file -> viewModel.importAnimation(file) },
                             getSavedAnimationFiles = { viewModel.getSavedAnimationFiles() },
+                            onApplyCustomPreset = { preset -> viewModel.applyCustomBlockPreset(preset) },
                             modifier = Modifier.height(timelineHeight)
                         )
                     }
@@ -722,6 +726,17 @@ fun EditorScreen(
             )
         }
 
+        // Custom Action Blocks Manager Dialog
+        if (isCustomBlocksManagerOpen) {
+            CustomBlocksManagerDialog(
+                onDismiss = { isCustomBlocksManagerOpen = false },
+                onApplyPresetToTimeline = { preset ->
+                    viewModel.applyCustomBlockPreset(preset)
+                    isCustomBlocksManagerOpen = false
+                }
+            )
+        }
+
         // Save notification banner
         uiState.saveMessage?.let { msg ->
             Box(
@@ -740,6 +755,7 @@ fun EditorScreen(
             }
         }
     }
+}
 }
 }
 
@@ -791,24 +807,15 @@ fun ModeIconButton(
             .clip(RoundedCornerShape(6.dp))
             .background(if (isSelected) Color(0xFF22C55E) else Color.Transparent)
             .clickable(onClick = onClick)
-            .padding(horizontal = 7.dp, vertical = 4.dp),
+            .padding(horizontal = 7.dp, vertical = 6.dp),
         contentAlignment = Alignment.Center
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                icon,
-                contentDescription = label,
-                tint = if (isSelected) Color.White else Color(0xFF94A3B8),
-                modifier = Modifier.size(14.dp)
-            )
-            Spacer(modifier = Modifier.width(3.dp))
-            Text(
-                label,
-                fontSize = 11.sp,
-                color = if (isSelected) Color.White else Color(0xFF94A3B8),
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-            )
-        }
+        Icon(
+            icon,
+            contentDescription = label,
+            tint = if (isSelected) Color.White else Color(0xFF94A3B8),
+            modifier = Modifier.size(16.dp)
+        )
     }
 }
 

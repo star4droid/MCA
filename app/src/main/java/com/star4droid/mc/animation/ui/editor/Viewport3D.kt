@@ -29,14 +29,15 @@ import kotlin.math.hypot
 @Composable
 fun Viewport3D(
     viewModel: EditorViewModel,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    sceneGraph: SceneGraph = viewModel.sceneGraph
 ) {
     val context = LocalContext.current
-    val glView = remember {
+    val glView = remember(sceneGraph) {
         EditorGLSurfaceView(
             context = context,
             viewModel = viewModel,
-            sceneGraph = viewModel.sceneGraph,
+            sceneGraph = sceneGraph,
             camera = viewModel.camera,
             gizmoController = viewModel.gizmoController,
             onSelectNode = { nodeId -> viewModel.selectNode(nodeId) },
@@ -44,11 +45,13 @@ fun Viewport3D(
                 viewModel.selectNode(viewModel.uiState.value.selectedNodeId)
             }
         ).also {
-            viewModel.renderer = it.renderer
+            if (sceneGraph == viewModel.sceneGraph) {
+                viewModel.renderer = it.renderer
+            }
         }
     }
 
-    DisposableEffect(Unit) {
+    DisposableEffect(glView) {
         glView.onResume()
         onDispose {
             glView.onPause()

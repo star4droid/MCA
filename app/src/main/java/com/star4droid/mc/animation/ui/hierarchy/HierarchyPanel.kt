@@ -30,6 +30,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -57,6 +58,7 @@ fun HierarchyPanel(
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
+    val expandedState = remember { mutableStateMapOf<String, Boolean>() }
 
     Column(
         modifier = modifier
@@ -108,6 +110,7 @@ fun HierarchyPanel(
                     node = rootNode,
                     depth = 0,
                     selectedNodeId = selectedNodeId,
+                    expandedState = expandedState,
                     onSelectNode = onSelectNode
                 )
             }
@@ -121,9 +124,10 @@ fun HierarchyNodeItem(
     node: SceneNode,
     depth: Int,
     selectedNodeId: String?,
+    expandedState: androidx.compose.runtime.snapshots.SnapshotStateMap<String, Boolean>,
     onSelectNode: (String) -> Unit
 ) {
-    var isExpanded by remember { mutableStateOf(true) }
+    val isExpanded = expandedState.getOrPut(node.id) { true }
     val isSelected = (node.id == selectedNodeId)
     val hasChildren = node.children.isNotEmpty()
 
@@ -153,7 +157,7 @@ fun HierarchyNodeItem(
                 Box(
                     modifier = Modifier
                         .size(20.dp)
-                        .clickable { isExpanded = !isExpanded },
+                        .clickable { expandedState[node.id] = !isExpanded },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
@@ -198,6 +202,7 @@ fun HierarchyNodeItem(
                     node = child,
                     depth = depth + 1,
                     selectedNodeId = selectedNodeId,
+                    expandedState = expandedState,
                     onSelectNode = onSelectNode
                 )
             }

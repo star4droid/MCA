@@ -11,10 +11,17 @@ import java.io.InputStream
 import java.io.InputStreamReader
 import java.util.UUID
 
+data class ObjTriangle(
+    val v1: Vec3, val v2: Vec3, val v3: Vec3,
+    val n1: Vec3 = Vec3(0f, 1f, 0f), val n2: Vec3 = Vec3(0f, 1f, 0f), val n3: Vec3 = Vec3(0f, 1f, 0f),
+    val uv1: Pair<Float, Float> = Pair(0f, 0f), val uv2: Pair<Float, Float> = Pair(1f, 0f), val uv3: Pair<Float, Float> = Pair(0f, 1f)
+)
+
 data class ObjModelData(
     val vertices: List<Vec3>,
     val normals: List<Vec3>,
     val uvs: List<Pair<Float, Float>>,
+    val triangles: List<ObjTriangle> = emptyList(),
     val materialName: String? = null,
     val texturePath: String? = null
 )
@@ -26,6 +33,7 @@ object ObjImporter {
         val vertices = mutableListOf<Vec3>()
         val normals = mutableListOf<Vec3>()
         val uvs = mutableListOf<Pair<Float, Float>>()
+        val triangles = mutableListOf<ObjTriangle>()
 
         var minX = Float.MAX_VALUE; var maxX = -Float.MAX_VALUE
         var minY = Float.MAX_VALUE; var maxY = -Float.MAX_VALUE
@@ -64,6 +72,37 @@ object ObjImporter {
                         uvs.add(Pair(u, v))
                     }
                 }
+                "f" -> {
+                    if (tokens.size >= 4) {
+                        val faceIndices = mutableListOf<Triple<Int, Int?, Int?>>()
+                        for (i in 1 until tokens.size) {
+                            val parts = tokens[i].split("/")
+                            val vIdx = parts[0].toIntOrNull()?.let { if (it < 0) vertices.size + it else it - 1 } ?: continue
+                            val vtIdx = parts.getOrNull(1)?.takeIf { it.isNotEmpty() }?.toIntOrNull()?.let { if (it < 0) uvs.size + it else it - 1 }
+                            val vnIdx = parts.getOrNull(2)?.takeIf { it.isNotEmpty() }?.toIntOrNull()?.let { if (it < 0) normals.size + it else it - 1 }
+                            faceIndices.add(Triple(vIdx, vtIdx, vnIdx))
+                        }
+                        for (i in 1 until faceIndices.size - 1) {
+                            val f0 = faceIndices[0]
+                            val f1 = faceIndices[i]
+                            val f2 = faceIndices[i + 1]
+
+                            val v1 = vertices.getOrElse(f0.first) { Vec3.ZERO }
+                            val v2 = vertices.getOrElse(f1.first) { Vec3.ZERO }
+                            val v3 = vertices.getOrElse(f2.first) { Vec3.ZERO }
+
+                            val n1 = f0.third?.let { normals.getOrNull(it) } ?: Vec3(0f, 1f, 0f)
+                            val n2 = f1.third?.let { normals.getOrNull(it) } ?: Vec3(0f, 1f, 0f)
+                            val n3 = f2.third?.let { normals.getOrNull(it) } ?: Vec3(0f, 1f, 0f)
+
+                            val uv1 = f0.second?.let { uvs.getOrNull(it) } ?: Pair(0f, 0f)
+                            val uv2 = f1.second?.let { uvs.getOrNull(it) } ?: Pair(1f, 0f)
+                            val uv3 = f2.second?.let { uvs.getOrNull(it) } ?: Pair(0f, 1f)
+
+                            triangles.add(ObjTriangle(v1, v2, v3, n1, n2, n3, uv1, uv2, uv3))
+                        }
+                    }
+                }
             }
         }
 
@@ -74,6 +113,9 @@ object ObjImporter {
         val centerX = if (maxX >= minX) (minX + maxX) * 0.5f else 0f
         val centerY = if (maxY >= minY) (minY + maxY) * 0.5f else 0.5f
         val centerZ = if (maxZ >= minZ) (minZ + maxZ) * 0.5f else 0f
+
+        val objData = ObjModelData(vertices, normals, uvs, triangles)
+
         return SceneNode(
             id = UUID.randomUUID().toString(),
             name = "Imported OBJ Model",
@@ -81,7 +123,8 @@ object ObjImporter {
             baseTransform = Transform(position = Vec3(centerX, centerY, centerZ)),
             animatedTransform = Transform(position = Vec3(centerX, centerY, centerZ)),
             material = Material(textureAssetId = "stone"),
-            boxDimensions = Vec3(spanX, spanY, spanZ)
+            boxDimensions = Vec3(spanX, spanY, spanZ),
+            objModelData = objData
         )
     }
 

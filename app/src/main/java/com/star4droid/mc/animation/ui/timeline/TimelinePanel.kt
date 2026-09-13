@@ -34,6 +34,9 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DirectionsRun
 import androidx.compose.material.icons.filled.DirectionsWalk
 import androidx.compose.material.icons.filled.DragIndicator
+import com.star4droid.mc.animation.ui.blocks.CustomBlockPreset
+import com.star4droid.mc.animation.ui.blocks.CustomBlocksManagerDialog
+import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.FlightTakeoff
@@ -72,6 +75,7 @@ import androidx.compose.material.icons.filled.EmojiEmotions
 import androidx.compose.material.icons.filled.Undo
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Divider
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -190,11 +194,13 @@ fun TimelinePanel(
     onExportAnimation: ((String) -> Unit)? = null,
     onImportAnimation: ((java.io.File) -> Unit)? = null,
     getSavedAnimationFiles: (() -> List<java.io.File>)? = null,
+    onApplyCustomPreset: ((CustomBlockPreset) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val duration = (timeline?.duration ?: 10.0f).coerceAtLeast(10f)
     var addBlockMenuOpen by remember { mutableStateOf(false) }
     var importMenuOpen by remember { mutableStateOf(false) }
+    var showCustomBlocksDialog by remember { mutableStateOf(false) }
     var selectedBlockId by remember { mutableStateOf<String?>(null) }
     var editingBlock by remember { mutableStateOf<ActionBlock?>(null) }
 
@@ -308,8 +314,29 @@ fun TimelinePanel(
                     onDismissRequest = { addBlockMenuOpen = false },
                     modifier = Modifier
                         .background(Color(0xFF1E293B))
-                        .heightIn(max = 320.dp)
+                        .heightIn(max = 340.dp)
                 ) {
+                    DropdownMenuItem(
+                        leadingIcon = {
+                            Icon(
+                                Icons.Default.Extension,
+                                contentDescription = null,
+                                tint = Color(0xFF8B5CF6),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        },
+                        text = {
+                            Column {
+                                Text("Custom Action Blocks...", color = Color(0xFF8B5CF6), fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                Text("View, Select & Apply Saved Custom Blocks", color = Color(0xFF94A3B8), fontSize = 10.sp)
+                            }
+                        },
+                        onClick = {
+                            addBlockMenuOpen = false
+                            showCustomBlocksDialog = true
+                        }
+                    )
+                    Divider(color = Color(0xFF334155))
                     ActionBlockType.entries.forEach { blockType ->
                         DropdownMenuItem(
                             leadingIcon = {
@@ -333,6 +360,16 @@ fun TimelinePanel(
                         )
                     }
                 }
+            }
+
+            if (showCustomBlocksDialog) {
+                CustomBlocksManagerDialog(
+                    onDismiss = { showCustomBlocksDialog = false },
+                    onApplyPresetToTimeline = { preset ->
+                        onApplyCustomPreset?.invoke(preset)
+                        showCustomBlocksDialog = false
+                    }
+                )
             }
 
             // REQUIREMENT 2: Export Animation File Button (Clean compact 28dp icon container)

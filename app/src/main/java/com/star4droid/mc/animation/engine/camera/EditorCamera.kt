@@ -48,7 +48,7 @@ class EditorCamera {
     }
 
     fun zoom(factor: Float) {
-        distance = (distance * factor).coerceIn(1.0f, 50.0f)
+        distance = (distance * factor).coerceIn(0.0001f, 100000.0f)
     }
 
     fun pan(deltaX: Float, deltaY: Float) {

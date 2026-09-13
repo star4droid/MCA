@@ -28,44 +28,111 @@ import java.util.UUID
 
 class ProjectRepository(private val context: Context) {
 
-    private val projectsDir: File
-        get() = File(context.filesDir, "projects").apply { if (!exists()) mkdirs() }
+    private val externalBaseDir: File
+        get() {
+            val ext = context.getExternalFilesDir(null)
+            return ext ?: context.filesDir
+        }
+
+    private fun sanitizeFolderName(name: String): String {
+        val sanitized = name.replace(Regex("[^a-zA-Z0-9_\\-\\s]"), "").trim()
+        return if (sanitized.isNotBlank()) sanitized else "Project"
+    }
+
+    fun getProjectDir(id: String, name: String = ""): File {
+        val base = externalBaseDir
+
+        if (name.isNotBlank()) {
+            val nameDir = File(base, sanitizeFolderName(name))
+            if (nameDir.exists() && File(nameDir, "project.json").exists()) {
+                return nameDir
+            }
+        }
+
+        val directDirs = base.listFiles() ?: emptyArray()
+        for (d in directDirs) {
+            if (d.isDirectory && d.name != "projects") {
+                val pf = File(d, "project.json")
+                if (pf.exists()) {
+                    try {
+                        val json = JSONObject(pf.readText())
+                        if (json.optString("id") == id) return d
+                    } catch (e: Exception) {}
+                }
+            }
+        }
+
+        val legacyDir = File(File(base, "projects"), id)
+        if (legacyDir.exists()) return legacyDir
+        val legacyInternal = File(File(context.filesDir, "projects"), id)
+        if (legacyInternal.exists()) return legacyInternal
+
+        val folderName = if (name.isNotBlank()) sanitizeFolderName(name) else id
+        val newDir = File(base, folderName)
+        ensureProjectSubdirs(newDir)
+        return newDir
+    }
+
+    fun ensureProjectSubdirs(projectDir: File) {
+        if (!projectDir.exists()) projectDir.mkdirs()
+        File(projectDir, "models").apply { if (!exists()) mkdirs() }
+        File(projectDir, "sounds").apply { if (!exists()) mkdirs() }
+        File(projectDir, "textures").apply { if (!exists()) mkdirs() }
+        File(projectDir, "scenes").apply { if (!exists()) mkdirs() }
+        File(projectDir, "animations").apply { if (!exists()) mkdirs() }
+        File(projectDir, "timelines").apply { if (!exists()) mkdirs() }
+    }
 
     fun listProjects(): List<ProjectMetadata> {
         val list = mutableListOf<ProjectMetadata>()
-        val dirs = projectsDir.listFiles() ?: return emptyList()
-        for (dir in dirs) {
-            if (dir.isDirectory) {
-                val metaFile = File(dir, "project.json")
-                if (metaFile.exists()) {
-                    try {
-                        val json = JSONObject(metaFile.readText())
-                        list.add(
-                            ProjectMetadata(
-                                id = json.getString("id"),
-                                name = json.optString("name", "Untitled"),
-                                version = json.optInt("version", 1),
-                                createdAt = json.optLong("createdAt", System.currentTimeMillis()),
-                                updatedAt = json.optLong("updatedAt", System.currentTimeMillis()),
-                                nodeCount = json.optInt("nodeCount", 0),
-                                timelineCount = json.optInt("timelineCount", 1)
-                            )
-                        )
-                    } catch (e: Exception) {
-                        e.printStackTrace()
+        val seenIds = mutableSetOf<String>()
+
+        fun scanDir(parent: File) {
+            val dirs = parent.listFiles() ?: return
+            for (dir in dirs) {
+                if (dir.isDirectory) {
+                    val metaFile = File(dir, "project.json")
+                    if (metaFile.exists()) {
+                        try {
+                            val json = JSONObject(metaFile.readText())
+                            val id = json.getString("id")
+                            if (!seenIds.contains(id)) {
+                                seenIds.add(id)
+                                list.add(
+                                    ProjectMetadata(
+                                        id = id,
+                                        name = json.optString("name", "Untitled"),
+                                        version = json.optInt("version", 1),
+                                        createdAt = json.optLong("createdAt", System.currentTimeMillis()),
+                                        updatedAt = json.optLong("updatedAt", System.currentTimeMillis()),
+                                        nodeCount = json.optInt("nodeCount", 0),
+                                        timelineCount = json.optInt("timelineCount", 1)
+                                    )
+                                )
+                            }
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
                     }
                 }
             }
         }
+
+        scanDir(externalBaseDir)
+
+        val legacyExt = File(externalBaseDir, "projects")
+        if (legacyExt.exists()) scanDir(legacyExt)
+
+        val legacyInt = File(context.filesDir, "projects")
+        if (legacyInt.exists()) scanDir(legacyInt)
+
         return list.sortedByDescending { it.updatedAt }
     }
 
     fun createProject(name: String, template: String = "steve"): String {
         val id = UUID.randomUUID().toString()
-        val projectDir = File(projectsDir, id).apply { mkdirs() }
-        File(projectDir, "timelines").mkdirs()
-        File(projectDir, "textures").mkdirs()
-        File(projectDir, "sounds").mkdirs()
+        val projectDir = getProjectDir(id, name)
+        ensureProjectSubdirs(projectDir)
 
         val sceneGraph = SceneGraph()
         val timelines = mutableListOf<TimelineAsset>()
@@ -161,11 +228,13 @@ class ProjectRepository(private val context: Context) {
     }
 
     fun loadProject(id: String): LoadedProject? {
-        val dir = File(projectsDir, id)
+        val dir = getProjectDir(id)
         if (!dir.exists()) return null
 
         val metaFile = File(dir, "project.json")
-        val sceneFile = File(dir, "scene.json")
+        val sceneFileInSub = File(File(dir, "scenes"), "scene.json")
+        val sceneFileInRoot = File(dir, "scene.json")
+        val sceneFile = if (sceneFileInSub.exists()) sceneFileInSub else sceneFileInRoot
 
         if (!metaFile.exists() || !sceneFile.exists()) return null
 
@@ -204,13 +273,23 @@ class ProjectRepository(private val context: Context) {
 
             // Load timelines
             val timelines = mutableListOf<TimelineAsset>()
-            val timelinesDir = File(dir, "timelines")
-            if (timelinesDir.exists()) {
-                val tlFiles = timelinesDir.listFiles() ?: emptyArray()
-                for (tlFile in tlFiles) {
-                    if (tlFile.name.endsWith(".json")) {
-                        val tlJson = JSONObject(tlFile.readText())
-                        timelines.add(deserializeTimeline(tlJson))
+            val animDir = File(dir, "animations")
+            val tlDir = File(dir, "timelines")
+            for (tDir in listOf(animDir, tlDir)) {
+                if (tDir.exists()) {
+                    val tlFiles = tDir.listFiles() ?: emptyArray()
+                    for (tlFile in tlFiles) {
+                        if (tlFile.name.endsWith(".json")) {
+                            try {
+                                val tlJson = JSONObject(tlFile.readText())
+                                val tl = deserializeTimeline(tlJson)
+                                if (timelines.none { it.id == tl.id }) {
+                                    timelines.add(tl)
+                                }
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
+                        }
                     }
                 }
             }
@@ -256,7 +335,8 @@ class ProjectRepository(private val context: Context) {
         timelines: List<TimelineAsset>,
         timelineInstances: List<TimelineInstance>
     ) {
-        val dir = File(projectsDir, id).apply { if (!exists()) mkdirs() }
+        val dir = getProjectDir(id, metadata.name)
+        ensureProjectSubdirs(dir)
         metadata.updatedAt = System.currentTimeMillis()
         metadata.nodeCount = sceneGraph.nodes.size
         metadata.timelineCount = timelines.size
@@ -273,7 +353,7 @@ class ProjectRepository(private val context: Context) {
         }
         File(dir, "project.json").writeText(metaJson.toString(2))
 
-        // 2. scene.json
+        // 2. scene.json in scenes/ (and root for legacy compatibility)
         val sceneJson = JSONObject().apply {
             val nodesArr = JSONArray()
             for (node in sceneGraph.nodes.values) {
@@ -300,13 +380,18 @@ class ProjectRepository(private val context: Context) {
             }
             put("timelineInstances", instArr)
         }
+        val scenesDir = File(dir, "scenes").apply { if (!exists()) mkdirs() }
+        File(scenesDir, "scene.json").writeText(sceneJson.toString(2))
         File(dir, "scene.json").writeText(sceneJson.toString(2))
 
-        // 3. timelines/
+        // 3. animations/ and timelines/
+        val animDir = File(dir, "animations").apply { if (!exists()) mkdirs() }
         val tlDir = File(dir, "timelines").apply { if (!exists()) mkdirs() }
         for (tl in timelines) {
             val tlJson = serializeTimeline(tl)
-            File(tlDir, "${tl.id}.json").writeText(tlJson.toString(2))
+            val text = tlJson.toString(2)
+            File(animDir, "${tl.id}.json").writeText(text)
+            File(tlDir, "${tl.id}.json").writeText(text)
         }
     }
 
@@ -324,7 +409,7 @@ class ProjectRepository(private val context: Context) {
     }
 
     fun deleteProject(id: String): Boolean {
-        val dir = File(projectsDir, id)
+        val dir = getProjectDir(id)
         return if (dir.exists()) dir.deleteRecursively() else false
     }
 
@@ -551,7 +636,7 @@ class ProjectRepository(private val context: Context) {
     }
 
     fun saveAnimationFile(name: String, blocks: List<ActionBlock>): File {
-        val animDir = File(projectsDir, "saved_animations").apply { if (!exists()) mkdirs() }
+        val animDir = File(externalBaseDir, "saved_animations").apply { if (!exists()) mkdirs() }
         val sanitized = name.replace(Regex("[^a-zA-Z0-9_-]"), "_")
         val file = File(animDir, "$sanitized.mcanim")
         val root = JSONObject().apply {
@@ -628,7 +713,7 @@ class ProjectRepository(private val context: Context) {
     }
 
     fun listSavedAnimations(): List<File> {
-        val animDir = File(projectsDir, "saved_animations").apply { if (!exists()) mkdirs() }
+        val animDir = File(externalBaseDir, "saved_animations").apply { if (!exists()) mkdirs() }
         return (animDir.listFiles() ?: emptyArray()).filter { it.name.endsWith(".mcanim") }.sortedBy { it.name }
     }
 

@@ -19,7 +19,8 @@ data class SceneNode(
     var cameraData: CameraData? = null,
     var lightData: LightData? = null,
     var boxDimensions: Vec3 = Vec3.ONE,
-    var characterSkinId: String = "steve"
+    var characterSkinId: String = "steve",
+    var objModelData: com.star4droid.mc.animation.utils.ObjModelData? = null
 ) {
     fun getWorldPosition(): Vec3 {
         return Vec3(worldMatrix[12], worldMatrix[13], worldMatrix[14])

@@ -105,6 +105,39 @@ object AnimationEvaluator {
         return map
     }
 
+    private fun resolveNodeIdByName(sceneGraph: SceneGraph, selectedNode: SceneNode, targetNodeName: String): String {
+        if (targetNodeName.isBlank()) return selectedNode.id
+        if (sceneGraph.nodes.containsKey(targetNodeName)) return targetNodeName
+
+        val norm = targetNodeName.replace("_", "").replace(" ", "").lowercase()
+        val partType = when (norm) {
+            "head" -> CharacterPartType.HEAD
+            "body", "torso" -> CharacterPartType.BODY
+            "root" -> CharacterPartType.ROOT
+            "rightarm", "rightupperarm" -> CharacterPartType.RIGHT_ARM
+            "rightforearm", "righthand", "rightelbow" -> CharacterPartType.RIGHT_FOREARM
+            "leftarm", "leftupperarm" -> CharacterPartType.LEFT_ARM
+            "leftforearm", "lefthand", "leftelbow" -> CharacterPartType.LEFT_FOREARM
+            "rightleg", "rightthigh", "rightupperleg" -> CharacterPartType.RIGHT_LEG
+            "rightlowerleg", "rightcalf", "rightknee", "rightshin" -> CharacterPartType.RIGHT_LOWER_LEG
+            "leftleg", "leftthigh", "leftupperleg" -> CharacterPartType.LEFT_LEG
+            "leftlowerleg", "leftcalf", "leftknee", "leftshin" -> CharacterPartType.LEFT_LOWER_LEG
+            else -> null
+        }
+
+        if (partType != null) {
+            val parts = findCharacterParts(sceneGraph, selectedNode)
+            parts[partType]?.let { return it.id }
+        }
+
+        val byName = sceneGraph.nodes.values.firstOrNull {
+            it.name.replace("_", "").replace(" ", "").lowercase().contains(norm)
+        }
+        if (byName != null) return byName.id
+
+        return selectedNode.id
+    }
+
     private fun applyActionBlock(
         sceneGraph: SceneGraph,
         block: ActionBlock,
@@ -343,23 +376,100 @@ object AnimationEvaluator {
             }
 
             ActionBlockType.ANIMATION_CLIP -> {
-                val cycle = (progress * block.duration * (PI * 2.0 * 2.0 * block.speed)).toFloat()
-                val legAngle = sin(cycle) * 28f * block.stepSize
-                val armAngle = -legAngle * 0.75f
-                parts[CharacterPartType.LEFT_LEG]?.let {
-                    it.animatedTransform = it.animatedTransform.copy(rotation = it.baseTransform.rotation.copy(x = legAngle))
+                if (!block.customJson.isNullOrBlank()) {
+                    try {
+                        val json = org.json.JSONObject(block.customJson!!)
+                        val relTime = progress * block.duration
+                        if (json.has("tracks")) {
+                            val tracksArr = json.getJSONArray("tracks")
+                            for (i in 0 until tracksArr.length()) {
+                                val trackObj = tracksArr.getJSONObject(i)
+                                val targetNodeName = trackObj.optString("targetNode", "")
+                                val targetNodeId = resolveNodeIdByName(sceneGraph, node, targetNodeName)
+                                val targetNodeObj = sceneGraph.getNode(targetNodeId) ?: continue
+
+                                if (trackObj.has("keyframes")) {
+                                    val kfArr = trackObj.getJSONArray("keyframes")
+                                    if (kfArr.length() > 0) {
+                                        var pos: Vec3? = null
+                                        var rot: Vec3? = null
+                                        var scale: Vec3? = null
+
+                                        for (k in 0 until kfArr.length()) {
+                                            val kf = kfArr.getJSONObject(k)
+                                            val t = kf.optDouble("time", 0.0).toFloat()
+                                            val nextKf = if (k < kfArr.length() - 1) kfArr.getJSONObject(k + 1) else null
+                                            val nextT = nextKf?.optDouble("time", t.toDouble())?.toFloat() ?: t
+
+                                            if (relTime >= t && (nextKf == null || relTime <= nextT)) {
+                                                val factor = if (nextT > t) ((relTime - t) / (nextT - t)).coerceIn(0f, 1f) else 0f
+
+                                                if (kf.has("position")) {
+                                                    val p0 = kf.getJSONArray("position")
+                                                    val v0 = Vec3(p0.getDouble(0).toFloat(), p0.getDouble(1).toFloat(), p0.getDouble(2).toFloat())
+                                                    pos = if (nextKf != null && nextKf.has("position")) {
+                                                        val p1 = nextKf.getJSONArray("position")
+                                                        val v1 = Vec3(p1.getDouble(0).toFloat(), p1.getDouble(1).toFloat(), p1.getDouble(2).toFloat())
+                                                        v0.lerp(v1, factor)
+                                                    } else v0
+                                                }
+
+                                                if (kf.has("rotation")) {
+                                                    val r0 = kf.getJSONArray("rotation")
+                                                    val v0 = Vec3(r0.getDouble(0).toFloat(), r0.getDouble(1).toFloat(), r0.getDouble(2).toFloat())
+                                                    rot = if (nextKf != null && nextKf.has("rotation")) {
+                                                        val r1 = nextKf.getJSONArray("rotation")
+                                                        val v1 = Vec3(r1.getDouble(0).toFloat(), r1.getDouble(1).toFloat(), r1.getDouble(2).toFloat())
+                                                        v0.lerp(v1, factor)
+                                                    } else v0
+                                                }
+
+                                                if (kf.has("scale")) {
+                                                    val s0 = kf.getJSONArray("scale")
+                                                    val v0 = Vec3(s0.getDouble(0).toFloat(), s0.getDouble(1).toFloat(), s0.getDouble(2).toFloat())
+                                                    scale = if (nextKf != null && nextKf.has("scale")) {
+                                                        val s1 = nextKf.getJSONArray("scale")
+                                                        val v1 = Vec3(s1.getDouble(0).toFloat(), s1.getDouble(1).toFloat(), s1.getDouble(2).toFloat())
+                                                        v0.lerp(v1, factor)
+                                                    } else v0
+                                                }
+                                                break
+                                            }
+                                        }
+
+                                        val curT = targetNodeObj.animatedTransform
+                                        val baseT = targetNodeObj.baseTransform
+                                        targetNodeObj.animatedTransform = curT.copy(
+                                            position = pos?.let { baseT.position + it } ?: curT.position,
+                                            rotation = rot?.let { baseT.rotation + it } ?: curT.rotation,
+                                            scale = scale ?: curT.scale
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                } else {
+                    val cycle = (progress * block.duration * (PI * 2.0 * 2.0 * block.speed)).toFloat()
+                    val legAngle = sin(cycle) * 28f * block.stepSize
+                    val armAngle = -legAngle * 0.75f
+                    parts[CharacterPartType.LEFT_LEG]?.let {
+                        it.animatedTransform = it.animatedTransform.copy(rotation = it.baseTransform.rotation.copy(x = legAngle))
+                    }
+                    parts[CharacterPartType.RIGHT_LEG]?.let {
+                        it.animatedTransform = it.animatedTransform.copy(rotation = it.baseTransform.rotation.copy(x = -legAngle))
+                    }
+                    parts[CharacterPartType.LEFT_ARM]?.let {
+                        it.animatedTransform = it.animatedTransform.copy(rotation = it.baseTransform.rotation.copy(x = armAngle))
+                    }
+                    parts[CharacterPartType.RIGHT_ARM]?.let {
+                        it.animatedTransform = it.animatedTransform.copy(rotation = it.baseTransform.rotation.copy(x = -armAngle))
+                    }
+                    bendLowerLegs(legAngle, -legAngle)
+                    bendForearms(armAngle, -armAngle)
                 }
-                parts[CharacterPartType.RIGHT_LEG]?.let {
-                    it.animatedTransform = it.animatedTransform.copy(rotation = it.baseTransform.rotation.copy(x = -legAngle))
-                }
-                parts[CharacterPartType.LEFT_ARM]?.let {
-                    it.animatedTransform = it.animatedTransform.copy(rotation = it.baseTransform.rotation.copy(x = armAngle))
-                }
-                parts[CharacterPartType.RIGHT_ARM]?.let {
-                    it.animatedTransform = it.animatedTransform.copy(rotation = it.baseTransform.rotation.copy(x = -armAngle))
-                }
-                bendLowerLegs(legAngle, -legAngle)
-                bendForearms(armAngle, -armAngle)
             }
 
             ActionBlockType.ROTATE -> {
