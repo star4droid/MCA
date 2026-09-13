@@ -76,4 +76,21 @@ class EditorCamera {
         pitch = 25.0f
         fov = 60.0f
     }
+
+    /**
+     * Set camera state from a scene camera node's world position, rotation, and FOV.
+     * Used during MP4 export to render from scene cameras.
+     */
+    fun setFromSceneCamera(position: Vec3, rotation: Vec3, sceneFov: Float) {
+        target = position + Vec3(
+            -sin(Math.toRadians(rotation.y.toDouble())).toFloat() * cos(Math.toRadians(rotation.x.toDouble())).toFloat(),
+            -sin(Math.toRadians(rotation.x.toDouble())).toFloat(),
+            -cos(Math.toRadians(rotation.y.toDouble())).toFloat() * cos(Math.toRadians(rotation.x.toDouble())).toFloat()
+        )
+        distance = 0.001f // Essentially at the eye position
+        yaw = rotation.y
+        pitch = -rotation.x
+        fov = sceneFov
+        isUsingSceneCamera = false // We set orbit params directly
+    }
 }

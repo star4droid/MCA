@@ -1,6 +1,7 @@
 package com.star4droid.mc.animation.ui.editor
 
 import android.content.res.Configuration
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -93,6 +94,8 @@ import com.star4droid.mc.animation.ui.inspector.InspectorPanel
 import com.star4droid.mc.animation.ui.scene.SceneManagerDialog
 import com.star4droid.mc.animation.ui.timeline.TimelinePanel
 import com.star4droid.mc.animation.ui.world.WorldBuildingOverlay
+import com.star4droid.mc.animation.export.Mp4ExportSettingsDialog
+import com.star4droid.mc.animation.export.RenderResultDialog
 
 @Composable
 fun EditorScreen(
@@ -117,6 +120,10 @@ fun EditorScreen(
     var timeOfDayMenuOpen by remember { mutableStateOf(false) }
     var isAiStudioOpen by remember { mutableStateOf(false) }
     var isCustomBlocksManagerOpen by remember { mutableStateOf(false) }
+    var isMp4ExportDialogOpen by remember { mutableStateOf(false) }
+    var renderResultFile by remember { mutableStateOf<java.io.File?>(null) }
+    val isExporting by viewModel.isExporting.collectAsState()
+    val exportProgress by viewModel.exportProgress.collectAsState()
     val topBarScrollState = rememberScrollState()
 
     // REQUIREMENT 9: Resizable Panel State Sizes with Default Values
@@ -610,6 +617,7 @@ fun EditorScreen(
                             onImportAnimation = { file -> viewModel.importAnimation(file) },
                             getSavedAnimationFiles = { viewModel.getSavedAnimationFiles() },
                             onApplyCustomPreset = { preset -> viewModel.applyCustomBlockPreset(preset) },
+                            onExportMp4 = { isMp4ExportDialogOpen = true },
                             modifier = Modifier.width(timelineWidth).fillMaxHeight(0.85f)
                         )
 
@@ -663,6 +671,7 @@ fun EditorScreen(
                             onImportAnimation = { file -> viewModel.importAnimation(file) },
                             getSavedAnimationFiles = { viewModel.getSavedAnimationFiles() },
                             onApplyCustomPreset = { preset -> viewModel.applyCustomBlockPreset(preset) },
+                            onExportMp4 = { isMp4ExportDialogOpen = true },
                             modifier = Modifier.height(timelineHeight)
                         )
                     }
@@ -734,6 +743,38 @@ fun EditorScreen(
                     viewModel.applyCustomBlockPreset(preset)
                     isCustomBlocksManagerOpen = false
                 }
+            )
+        }
+
+        // MP4 Video Export Dialog
+        if (isMp4ExportDialogOpen) {
+            val timelineDuration = viewModel.getActiveTimelineDuration()
+            Mp4ExportSettingsDialog(
+                timelineDuration = timelineDuration,
+                isExporting = isExporting,
+                exportProgress = exportProgress,
+                onDismiss = { isMp4ExportDialogOpen = false },
+                onStartExport = { config ->
+                    viewModel.exportMp4(
+                        config = config,
+                        onComplete = { outputFile ->
+                            isMp4ExportDialogOpen = false
+                            renderResultFile = outputFile
+                        },
+                        onError = { error ->
+                            Toast.makeText(context, "Export error: $error", Toast.LENGTH_LONG).show()
+                        }
+                    )
+                }
+            )
+        }
+
+        // Render Result Dialog (shown after render finishes)
+        renderResultFile?.let { file ->
+            RenderResultDialog(
+                videoFile = file,
+                onDismiss = { renderResultFile = null },
+                onDelete = { renderResultFile = null }
             )
         }
 

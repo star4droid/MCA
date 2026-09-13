@@ -27,6 +27,12 @@ class SceneRenderer(
 
     var selectedNodeId: String? = null
     var currentTimeOfDay: TimeOfDay = TimeOfDay.NOON
+    var isExportRendering: Boolean = false
+
+    fun initOffscreen(width: Int, height: Int) {
+        onSurfaceCreated(null, null)
+        onSurfaceChanged(null, width, height)
+    }
 
     private var shader: Shader? = null
     private var cubeMesh: Mesh? = null
@@ -177,19 +183,21 @@ class SceneRenderer(
             GLES20.glUniform1fv(s.uPointLightRange, lightNodes.size, ranges, 0)
         }
 
-        // 3. Render Ground Grid
-        renderGrid(s, grid, viewProjMatrix)
+        // 3. Render Ground Grid (Skip if exporting video)
+        if (!isExportRendering) {
+            renderGrid(s, grid, viewProjMatrix)
+        }
 
         // 4. Render Scene Graph Nodes
         for (node in sceneGraph.getAllNodes()) {
             if (!node.visible) continue
-            val isSelected = (node.id == selectedNodeId)
+            val isSelected = if (isExportRendering) false else (node.id == selectedNodeId)
             renderSceneNode(s, cube, node, viewProjMatrix, isSelected)
         }
 
-        // 5. Render Transform Gizmo for selected object
+        // 5. Render Transform Gizmo for selected object (Skip if exporting video)
         val selectedNode = selectedNodeId?.let { sceneGraph.getNode(it) }
-        if (selectedNode != null && gizmoController.currentMode != EditorMode.SELECT && !camera.isUsingSceneCamera) {
+        if (!isExportRendering && selectedNode != null && gizmoController.currentMode != EditorMode.SELECT && !camera.isUsingSceneCamera) {
             renderGizmo(s, cube, selectedNode.getWorldPosition(), viewProjMatrix)
         }
     }
@@ -278,9 +286,8 @@ class SceneRenderer(
                 }
             }
             SceneNodeType.CAMERA -> {
-                // Do NOT draw camera marker when looking through the scene camera or when in camera mode,
-                // because rendering a solid marker at the camera's eye position completely blocks the view.
-                if (!camera.isUsingSceneCamera) {
+                // Do NOT draw camera marker when exporting video or looking through scene camera
+                if (!isExportRendering && !camera.isUsingSceneCamera) {
                     val eyePos = camera.getEyePosition()
                     val dist = node.getWorldPosition().distanceTo(eyePos)
                     if (dist > 0.45f) {
@@ -289,7 +296,9 @@ class SceneRenderer(
                 }
             }
             SceneNodeType.LIGHT -> {
-                renderLightIcon(s, cube, node, viewProj, isSelected)
+                if (!isExportRendering) {
+                    renderLightIcon(s, cube, node, viewProj, isSelected)
+                }
             }
             else -> {}
         }

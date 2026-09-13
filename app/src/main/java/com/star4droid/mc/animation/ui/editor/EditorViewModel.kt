@@ -45,6 +45,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import com.star4droid.mc.animation.export.Mp4ExportConfig
+import com.star4droid.mc.animation.export.Mp4Exporter
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.UUID
 
 data class ActionBlockGlobalSettings(
@@ -102,6 +109,7 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
     val gizmoController = GizmoController(sceneGraph, historyManager)
 
     var renderer: SceneRenderer? = null
+    var glSurfaceView: android.opengl.GLSurfaceView? = null
 
     val timelines = mutableListOf<TimelineAsset>()
     val timelineInstances = mutableListOf<TimelineInstance>()
@@ -112,6 +120,12 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
 
     private val _uiState = MutableStateFlow(EditorUiState())
     val uiState: StateFlow<EditorUiState> = _uiState.asStateFlow()
+
+    private val _isExporting = MutableStateFlow(false)
+    val isExporting: StateFlow<Boolean> = _isExporting.asStateFlow()
+
+    private val _exportProgress = MutableStateFlow(0f)
+    val exportProgress: StateFlow<Float> = _exportProgress.asStateFlow()
 
     private var playbackJob: Job? = null
 
@@ -266,6 +280,18 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         } else {
             startPlayback()
         }
+    }
+
+    fun getActiveTimelineDuration(): Float {
+        val activeTl = getActiveTimeline() ?: return 10f
+        var maxEnd = activeTl.duration.coerceAtLeast(10f)
+        for (b in activeTl.actionBlocks) {
+            val end = b.startTime + b.duration
+            if (end > maxEnd) {
+                maxEnd = end
+            }
+        }
+        return maxEnd
     }
 
     fun startPlayback() {
@@ -1043,6 +1069,75 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
             viewModelScope.launch {
                 delay(2000)
                 _uiState.value = _uiState.value.copy(saveMessage = null)
+            }
+        }
+    }
+
+    fun exportMp4(
+        config: Mp4ExportConfig,
+        onComplete: (File) -> Unit,
+        onError: (String) -> Unit
+    ) {
+        val activeTimeline = getActiveTimeline() ?: run {
+            onError("No active timeline to export")
+            return
+        }
+
+        viewModelScope.launch(Dispatchers.IO) {
+            _isExporting.value = true
+            _exportProgress.value = 0f
+
+            try {
+                val projectDir = projectRepository.getProjectDir(_uiState.value.projectId, _uiState.value.projectName)
+                val exportDir = File(projectDir, "exports").apply { mkdirs() }
+                val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+                val cleanName = _uiState.value.projectName.replace(Regex("[^a-zA-Z0-9_\\-\\s]"), "").trim().ifBlank { "Project" }
+                val outputFile = File(exportDir, "${cleanName}_$timeStamp.mp4")
+
+                val exporter = Mp4Exporter()
+                exporter.export(
+                    context = getApplication(),
+                    outputFile = outputFile,
+                    config = config,
+                    sceneGraph = sceneGraph,
+                    timeline = activeTimeline,
+                    timelineInstances = timelineInstances.toList(),
+                    gizmoController = gizmoController,
+                    camera = camera,
+                    glSurfaceView = glSurfaceView,
+                    callback = object : Mp4Exporter.ExportCallback {
+                        override fun onProgress(frame: Int, totalFrames: Int) {
+                            _exportProgress.value = frame.toFloat() / totalFrames.coerceAtLeast(1)
+                        }
+
+                        override fun onComplete(outputFile: File) {
+                            _isExporting.value = false
+                            _exportProgress.value = 1f
+                            _uiState.value = _uiState.value.copy(
+                                saveMessage = "Video exported to ${outputFile.name}"
+                            )
+                            viewModelScope.launch(Dispatchers.Main) {
+                                onComplete(outputFile)
+                                delay(2500)
+                                if (_uiState.value.saveMessage?.startsWith("Video exported") == true) {
+                                    _uiState.value = _uiState.value.copy(saveMessage = null)
+                                }
+                            }
+                        }
+
+                        override fun onError(error: String) {
+                            _isExporting.value = false
+                            viewModelScope.launch(Dispatchers.Main) {
+                                onError(error)
+                            }
+                        }
+                    }
+                )
+            } catch (e: Exception) {
+                _isExporting.value = false
+                viewModelScope.launch(Dispatchers.Main) {
+                    onError(e.message ?: "Export failed")
+                }
             }
         }
     }

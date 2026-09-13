@@ -630,6 +630,11 @@ class ProjectRepository(private val context: Context) {
                 put("moveVector", serializeVec3(block.moveVector))
                 put("scaleVector", serializeVec3(block.scaleVector))
                 block.clipFileName?.let { put("clipFileName", it) }
+                put("angle", block.angle.toDouble())
+                put("jumpHeight", block.jumpHeight.toDouble())
+                put("amplitude", block.amplitude.toDouble())
+                block.customJson?.let { put("customJson", it) }
+                put("isDeltaBased", block.isDeltaBased)
             })
         }
         put("actionBlocks", blocksArr)
@@ -661,6 +666,11 @@ class ProjectRepository(private val context: Context) {
                     put("moveVector", serializeVec3(block.moveVector))
                     put("scaleVector", serializeVec3(block.scaleVector))
                     block.clipFileName?.let { put("clipFileName", it) }
+                    put("angle", block.angle.toDouble())
+                    put("jumpHeight", block.jumpHeight.toDouble())
+                    put("amplitude", block.amplitude.toDouble())
+                    block.customJson?.let { put("customJson", it) }
+                    put("isDeltaBased", block.isDeltaBased)
                 })
             }
             put("blocks", arr)
@@ -702,7 +712,12 @@ class ProjectRepository(private val context: Context) {
                     startPosition = startPos,
                     moveVector = moveVec,
                     scaleVector = scaleVec,
-                    clipFileName = bObj.optString("clipFileName").ifEmpty { null }
+                    clipFileName = bObj.optString("clipFileName").ifEmpty { null },
+                    angle = bObj.optDouble("angle", 90.0).toFloat(),
+                    jumpHeight = bObj.optDouble("jumpHeight", 1.5).toFloat(),
+                    amplitude = bObj.optDouble("amplitude", 1.0).toFloat(),
+                    customJson = bObj.optString("customJson").ifEmpty { null },
+                    isDeltaBased = bObj.optBoolean("isDeltaBased", false)
                 )
                 list.add(block)
             }
@@ -784,7 +799,12 @@ class ProjectRepository(private val context: Context) {
                     startPosition = startPos,
                     moveVector = moveVec,
                     scaleVector = scaleVec,
-                    clipFileName = bObj.optString("clipFileName").ifEmpty { null }
+                    clipFileName = bObj.optString("clipFileName").ifEmpty { null },
+                    angle = bObj.optDouble("angle", 90.0).toFloat(),
+                    jumpHeight = bObj.optDouble("jumpHeight", 1.5).toFloat(),
+                    amplitude = bObj.optDouble("amplitude", 1.0).toFloat(),
+                    customJson = bObj.optString("customJson").ifEmpty { null },
+                    isDeltaBased = bObj.optBoolean("isDeltaBased", false)
                 )
                 timeline.actionBlocks.add(block)
             }

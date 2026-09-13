@@ -15,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -23,6 +24,10 @@ import androidx.compose.ui.window.Dialog
 import com.star4droid.mc.animation.animation.ActionBlock
 import com.star4droid.mc.animation.animation.ActionBlockType
 import com.star4droid.mc.animation.engine.math.Vec3
+import com.star4droid.mc.animation.project.ProjectRepository
+import com.star4droid.mc.animation.ui.blocks.CustomBlockPreset
+import com.star4droid.mc.animation.ui.blocks.CustomBlocksRepository
+import org.json.JSONObject
 
 @Composable
 fun ActionBlockSettingsDialog(
@@ -32,6 +37,7 @@ fun ActionBlockSettingsDialog(
     onApplyToAll: (ActionBlock) -> Unit,
     onRemoveCustom: (String) -> Unit
 ) {
+    val context = LocalContext.current
     var duration by remember { mutableStateOf(block.duration) }
     var enablePositionMove by remember { mutableStateOf(block.enablePositionMove) }
     var stepSize by remember { mutableStateOf(block.stepSize) }
@@ -43,6 +49,47 @@ fun ActionBlockSettingsDialog(
     var targetScaleY by remember { mutableStateOf(block.scaleVector.y) }
     var targetScaleZ by remember { mutableStateOf(block.scaleVector.z) }
     var clipFileName by remember { mutableStateOf(block.clipFileName ?: "Walk Cycle") }
+    var customJsonState by remember { mutableStateOf(block.customJson) }
+
+    val savedPresets = remember {
+        val loaded = CustomBlocksRepository.loadCustomPresets(context).toMutableList()
+        val files = ProjectRepository(context).getSavedAnimationFiles()
+        for (f in files) {
+            if (loaded.none { it.name.equals(f.nameWithoutExtension, ignoreCase = true) }) {
+                try {
+                    val jsonStr = f.readText()
+                    val jsonObj = JSONObject(jsonStr)
+                    val name = jsonObj.optString("name", f.nameWithoutExtension)
+                    val blocksArr = jsonObj.optJSONArray("blocks")
+                    var maxDur = 2.0f
+                    if (blocksArr != null && blocksArr.length() > 0) {
+                        var total = 0f
+                        for (i in 0 until blocksArr.length()) {
+                            val b = blocksArr.getJSONObject(i)
+                            val st = b.optDouble("startTime", 0.0).toFloat()
+                            val du = b.optDouble("duration", 2.0).toFloat()
+                            if (st + du > total) total = st + du
+                        }
+                        if (total > 0f) maxDur = total
+                    }
+                    loaded.add(
+                        CustomBlockPreset(
+                            id = f.nameWithoutExtension,
+                            name = name,
+                            description = "Saved Animation File",
+                            category = "SAVED",
+                            duration = maxDur,
+                            jsonContent = jsonStr,
+                            file = f
+                        )
+                    )
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
+        loaded
+    }
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
@@ -220,48 +267,80 @@ fun ActionBlockSettingsDialog(
                     }
 
                     ActionBlockType.ANIMATION_CLIP -> {
-                        Text("Animation Clip Preset:", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFE2E8F0))
-                        Spacer(modifier = Modifier.height(4.dp))
-                        val clipOptions = listOf("Walk Cycle", "Run Sprint", "Wave Gesture", "Idle Motion", "Combat Attack")
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            clipOptions.take(3).forEach { clipName ->
-                                val isSel = clipFileName == clipName
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clip(RoundedCornerShape(6.dp))
-                                        .background(if (isSel) Color(0xFFA855F7) else Color(0xFF334155))
-                                        .clickable { clipFileName = clipName }
-                                        .padding(vertical = 6.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(clipName, fontSize = 10.sp, color = Color.White, fontWeight = FontWeight.Bold)
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Text("Clip Playback Speed: ${String.format("%.2f", speed)}x", fontSize = 12.sp, color = Color(0xFFE2E8F0))
-                        Slider(
-                            value = speed,
-                            onValueChange = { speed = (Math.round(it * 100f) / 100f).coerceIn(0.2f, 4.0f) },
-                            valueRange = 0.2f..4.0f,
-                            colors = SliderDefaults.colors(thumbColor = Color(0xFFA855F7), activeTrackColor = Color(0xFF7C3AED))
-                        )
-
+                        Text("Select Saved Animation Clip:", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFE2E8F0))
                         Spacer(modifier = Modifier.height(6.dp))
 
-                        Text("Limb Motion Amplitude: ${String.format("%.2f", stepSize)}x", fontSize = 12.sp, color = Color(0xFFE2E8F0))
-                        Slider(
-                            value = stepSize,
-                            onValueChange = { stepSize = (Math.round(it * 100f) / 100f).coerceIn(0.1f, 3.0f) },
-                            valueRange = 0.1f..3.0f,
-                            colors = SliderDefaults.colors(thumbColor = Color(0xFF38BDF8), activeTrackColor = Color(0xFF0284C7))
-                        )
+                        if (savedPresets.isNotEmpty()) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(Color(0xFF0F172A), RoundedCornerShape(10.dp))
+                                    .border(1.dp, Color(0xFF334155), RoundedCornerShape(10.dp))
+                                    .padding(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                savedPresets.forEach { preset ->
+                                    val isSel = clipFileName == preset.name
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(if (isSel) Color(0xFF0284C7) else Color(0xFF1E293B))
+                                            .clickable {
+                                                clipFileName = preset.name
+                                                customJsonState = preset.jsonContent
+                                                duration = preset.duration
+                                            }
+                                            .padding(horizontal = 12.dp, vertical = if (isSel) 8.dp else 10.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text(
+                                                text = preset.name,
+                                                color = Color.White,
+                                                fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium,
+                                                fontSize = 13.sp,
+                                                maxLines = 1
+                                            )
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                if (!isSel) {
+                                                    Text(
+                                                        text = "${String.format("%.1f", preset.duration)}s",
+                                                        color = Color(0xFF94A3B8),
+                                                        fontSize = 11.sp
+                                                    )
+                                                } else {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Check,
+                                                        contentDescription = "Selected",
+                                                        tint = Color.White,
+                                                        modifier = Modifier.size(18.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        if (isSel && preset.description.isNotBlank()) {
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(
+                                                text = "${preset.description} • ${String.format("%.1f", preset.duration)}s",
+                                                color = Color(0xFFE2E8F0),
+                                                fontSize = 11.sp
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            Text(
+                                "No saved animations found. Create or save an animation preset to use it as a clip.",
+                                fontSize = 11.sp,
+                                color = Color(0xFF94A3B8),
+                                modifier = Modifier.padding(vertical = 8.dp)
+                            )
+                        }
                     }
 
                     ActionBlockType.LOOK_LEFT, ActionBlockType.LOOK_RIGHT -> {
@@ -299,7 +378,7 @@ fun ActionBlockSettingsDialog(
 
                 val currentUpdatedBlock = remember(
                     duration, enablePositionMove, stepSize, speed,
-                    vecX, vecY, vecZ, targetScaleX, targetScaleY, targetScaleZ, clipFileName
+                    vecX, vecY, vecZ, targetScaleX, targetScaleY, targetScaleZ, clipFileName, customJsonState
                 ) {
                     block.copy(
                         duration = duration,
@@ -308,7 +387,9 @@ fun ActionBlockSettingsDialog(
                         speed = speed,
                         moveVector = Vec3(vecX, vecY, vecZ),
                         scaleVector = Vec3(targetScaleX, targetScaleY, targetScaleZ),
-                        clipFileName = clipFileName
+                        clipFileName = clipFileName,
+                        customJson = customJsonState,
+                        hasCustomSettings = if (block.type == ActionBlockType.ANIMATION_CLIP) true else block.hasCustomSettings
                     )
                 }
 

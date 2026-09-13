@@ -47,6 +47,7 @@ fun Viewport3D(
         ).also {
             if (sceneGraph == viewModel.sceneGraph) {
                 viewModel.renderer = it.renderer
+                viewModel.glSurfaceView = it
             }
         }
     }

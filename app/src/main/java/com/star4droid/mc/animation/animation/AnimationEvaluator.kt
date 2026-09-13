@@ -347,16 +347,22 @@ object AnimationEvaluator {
             ActionBlockType.MOVE_TO_POS -> {
                 val targetNode = if (parts.containsKey(CharacterPartType.ROOT)) rootNode else node
                 val baseT = runningTransforms.getOrPut(targetNode.id) { targetNode.baseTransform.copyTransform() }
-                val delta = if (block.targetPosition != Vec3.ZERO && block.startPosition != null && block.targetPosition != block.startPosition) {
-                    block.targetPosition - block.startPosition!!
+                val destPos = if (!block.isDeltaBased && block.targetPosition != Vec3.ZERO) {
+                    block.targetPosition
                 } else {
-                    block.moveVector * block.stepSize
+                    val delta = if (block.targetPosition != Vec3.ZERO && block.startPosition != null && block.targetPosition != block.startPosition) {
+                        block.targetPosition - block.startPosition!!
+                    } else {
+                        block.moveVector * block.stepSize
+                    }
+                    baseT.position + delta
                 }
                 val curProgress = if (isCompleted) 1f else progress
-                val curPos = baseT.position + delta * curProgress
+                val startPos = block.startPosition ?: baseT.position
+                val curPos = startPos.lerp(destPos, curProgress)
                 targetNode.animatedTransform = targetNode.animatedTransform.copy(position = curPos)
                 if (isCompleted) {
-                    runningTransforms[targetNode.id] = baseT.copy(position = baseT.position + delta)
+                    runningTransforms[targetNode.id] = baseT.copy(position = destPos)
                 }
             }
 
@@ -437,13 +443,24 @@ object AnimationEvaluator {
                                             }
                                         }
 
-                                        val curT = targetNodeObj.animatedTransform
-                                        val baseT = targetNodeObj.baseTransform
-                                        targetNodeObj.animatedTransform = curT.copy(
-                                            position = pos?.let { baseT.position + it } ?: curT.position,
-                                            rotation = rot?.let { baseT.rotation + it } ?: curT.rotation,
-                                            scale = scale ?: curT.scale
+                                        val activeBaseT = runningTransforms.getOrPut(targetNodeObj.id) { targetNodeObj.baseTransform.copyTransform() }
+                                        val newPos = pos?.let { activeBaseT.position + it } ?: targetNodeObj.animatedTransform.position
+                                        val newRot = rot?.let { activeBaseT.rotation + it } ?: targetNodeObj.animatedTransform.rotation
+                                        val newScale = scale?.let { Vec3(activeBaseT.scale.x * it.x, activeBaseT.scale.y * it.y, activeBaseT.scale.z * it.z) } ?: targetNodeObj.animatedTransform.scale
+
+                                        targetNodeObj.animatedTransform = targetNodeObj.animatedTransform.copy(
+                                            position = newPos,
+                                            rotation = newRot,
+                                            scale = newScale
                                         )
+
+                                        if (isCompleted) {
+                                            runningTransforms[targetNodeObj.id] = activeBaseT.copy(
+                                                position = newPos,
+                                                rotation = newRot,
+                                                scale = newScale
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -875,6 +892,14 @@ object AnimationEvaluator {
                     parts[CharacterPartType.HEAD]?.let { head ->
                         head.animatedTransform = head.animatedTransform.copy(rotation = Vec3(-10f, sin(cycle) * 15f, 10f))
                     }
+                }
+            }
+
+            ActionBlockType.DISABLE_CAMERA -> {
+                // Toggle camera enabled state for the target node during playback/export
+                val camNode = sceneGraph.getNode(block.targetNodeId) ?: return
+                if (camNode.type == SceneNodeType.CAMERA && camNode.cameraData != null) {
+                    camNode.cameraData = camNode.cameraData!!.copy(enabled = false)
                 }
             }
         }

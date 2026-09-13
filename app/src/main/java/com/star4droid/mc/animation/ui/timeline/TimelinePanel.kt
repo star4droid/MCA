@@ -73,6 +73,8 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.EmojiEmotions
 import androidx.compose.material.icons.filled.Undo
+import androidx.compose.material.icons.filled.VideocamOff
+import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Divider
@@ -134,6 +136,7 @@ fun getActionBlockColor(type: ActionBlockType): Color = when (type) {
     ActionBlockType.SPIN_ATTACK -> Color(0xFFF472B6)
     ActionBlockType.BLOCK_SHIELD -> Color(0xFF60A5FA)
     ActionBlockType.TAUNT -> Color(0xFFFBCFE8)
+    ActionBlockType.DISABLE_CAMERA -> Color(0xFF475569)
 }
 
 fun getActionBlockIcon(type: ActionBlockType): ImageVector = when (type) {
@@ -167,6 +170,7 @@ fun getActionBlockIcon(type: ActionBlockType): ImageVector = when (type) {
     ActionBlockType.SPIN_ATTACK -> Icons.Default.RotateLeft
     ActionBlockType.BLOCK_SHIELD -> Icons.Default.Shield
     ActionBlockType.TAUNT -> Icons.Default.EmojiEmotions
+    ActionBlockType.DISABLE_CAMERA -> Icons.Default.VideocamOff
 }
 
 @Composable
@@ -195,6 +199,7 @@ fun TimelinePanel(
     onImportAnimation: ((java.io.File) -> Unit)? = null,
     getSavedAnimationFiles: (() -> List<java.io.File>)? = null,
     onApplyCustomPreset: ((CustomBlockPreset) -> Unit)? = null,
+    onExportMp4: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val duration = (timeline?.duration ?: 10.0f).coerceAtLeast(10f)
@@ -423,6 +428,19 @@ fun TimelinePanel(
                             )
                         }
                     }
+                }
+            }
+
+            // MP4 Video Export Button
+            if (onExportMp4 != null) {
+                IconButton(
+                    onClick = { onExportMp4() },
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color(0xFF334155))
+                ) {
+                    Icon(Icons.Default.Videocam, contentDescription = "Export MP4 Video", tint = Color(0xFFF59E0B), modifier = Modifier.size(16.dp))
                 }
             }
 

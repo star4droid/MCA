@@ -34,7 +34,8 @@ enum class ActionBlockType(val displayName: String, val defaultDuration: Float) 
     SNEAK_WALK("Sneak Walk", 2.0f),
     SPIN_ATTACK("Spin Attack", 1.0f),
     BLOCK_SHIELD("Block Shield", 1.0f),
-    TAUNT("Taunt", 1.2f)
+    TAUNT("Taunt", 1.2f),
+    DISABLE_CAMERA("Disable Camera", 0.1f)
 }
 
 data class ActionBlock(
@@ -57,7 +58,8 @@ data class ActionBlock(
     var angle: Float = 90f,
     var jumpHeight: Float = 1.5f,
     var amplitude: Float = 1.0f,
-    var customJson: String? = null
+    var customJson: String? = null,
+    var isDeltaBased: Boolean = false
 ) {
     fun copyBlock(): ActionBlock = copy(id = UUID.randomUUID().toString())
 }
