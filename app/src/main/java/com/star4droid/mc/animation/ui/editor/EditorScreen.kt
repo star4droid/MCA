@@ -323,6 +323,14 @@ fun EditorScreen(
                             onClick = { addMenuOpen = false; viewModel.addBlock("grass") }
                         )
                         DropdownMenuItem(
+                            text = { Text("Add Half Block (Slab) 🧱", color = Color.White) },
+                            onClick = { addMenuOpen = false; viewModel.addHalfBlock("stone") }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Add Step Block (Stairs) 🪜", color = Color.White) },
+                            onClick = { addMenuOpen = false; viewModel.addStepBlock("oak_planks") }
+                        )
+                        DropdownMenuItem(
                             text = { Text("Add Character 👤", color = Color.White) },
                             onClick = { addMenuOpen = false; showCharacterDialog = true }
                         )
@@ -995,7 +1003,7 @@ fun PositionPickerOverlay(
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(label, fontWeight = FontWeight.Bold, color = color, fontSize = 11.sp)
                                 Text(
-                                    String.format("%.2f", valVal),
+                                    com.star4droid.mc.animation.ui.inspector.formatFloatValue(valVal),
                                     color = Color.White,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 13.sp,

@@ -548,7 +548,7 @@ fun InspectorPanel(
             }
 
             // Material / Block / Plane Texture
-            if (node.type == SceneNodeType.BLOCK || node.type == SceneNodeType.GROUND || node.type == SceneNodeType.PLANE) {
+            if (node.type == SceneNodeType.BLOCK || node.type == SceneNodeType.HALF_BLOCK || node.type == SceneNodeType.STEP_BLOCK || node.type == SceneNodeType.GROUND || node.type == SceneNodeType.PLANE) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -873,7 +873,7 @@ fun TransformChannelGroup(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            String.format("%.1f", v),
+                            formatFloatValue(v),
                             fontSize = 11.sp,
                             fontFamily = FontFamily.Monospace,
                             color = Color(0xFFE2E8F0)
@@ -900,6 +900,12 @@ fun TransformChannelGroup(
     }
 }
 
+fun formatFloatValue(value: Float): String {
+    if (value == 0f) return "0"
+    val formatted = String.format(java.util.Locale.US, "%.4f", value)
+    return formatted.dropLastWhile { it == '0' }.dropLastWhile { it == '.' }
+}
+
 @Composable
 fun NumericKeypadDialog(
     title: String,
@@ -907,7 +913,7 @@ fun NumericKeypadDialog(
     onDismiss: () -> Unit,
     onConfirm: (Float) -> Unit
 ) {
-    var textState by remember { mutableStateOf(String.format("%.1f", initialValue)) }
+    var textState by remember { mutableStateOf(formatFloatValue(initialValue)) }
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(

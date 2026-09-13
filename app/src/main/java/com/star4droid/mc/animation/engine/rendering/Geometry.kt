@@ -350,4 +350,108 @@ object Geometry {
 
         return Mesh(vBuf, iBuf, indexData.size)
     }
+
+    fun createHalfBlockMesh(): Mesh {
+        return createCubeMesh(1.0f, 0.5f, 1.0f)
+    }
+
+    fun createStepBlockMesh(): Mesh {
+        // Lower base box (1.0 x 0.5 x 1.0, y: -0.5..0.0)
+        // Upper step box (1.0 x 0.5 x 0.5, y: 0.0..0.5, z: -0.5..0.0)
+        val vertices = floatArrayOf(
+            // --- Lower Base Box ---
+            // Front (Z+)
+            -0.5f, -0.5f,  0.5f,   0f, 0f, 1f,   0f, 0.5f,
+             0.5f, -0.5f,  0.5f,   0f, 0f, 1f,   1f, 0.5f,
+             0.5f,  0.0f,  0.5f,   0f, 0f, 1f,   1f, 0f,
+            -0.5f,  0.0f,  0.5f,   0f, 0f, 1f,   0f, 0f,
+
+            // Back (Z-)
+             0.5f, -0.5f, -0.5f,   0f, 0f, -1f,  0f, 0.5f,
+            -0.5f, -0.5f, -0.5f,   0f, 0f, -1f,  1f, 0.5f,
+            -0.5f,  0.0f, -0.5f,   0f, 0f, -1f,  1f, 0f,
+             0.5f,  0.0f, -0.5f,   0f, 0f, -1f,  0f, 0f,
+
+            // Bottom (Y-)
+            -0.5f, -0.5f, -0.5f,   0f, -1f, 0f,  0f, 1f,
+             0.5f, -0.5f, -0.5f,   0f, -1f, 0f,  1f, 1f,
+             0.5f, -0.5f,  0.5f,   0f, -1f, 0f,  1f, 0f,
+            -0.5f, -0.5f,  0.5f,   0f, -1f, 0f,  0f, 0f,
+
+            // Right Base (X+)
+             0.5f, -0.5f,  0.5f,   1f, 0f, 0f,   0f, 0.5f,
+             0.5f, -0.5f, -0.5f,   1f, 0f, 0f,   1f, 0.5f,
+             0.5f,  0.0f, -0.5f,   1f, 0f, 0f,   1f, 0f,
+             0.5f,  0.0f,  0.5f,   1f, 0f, 0f,   0f, 0f,
+
+            // Left Base (X-)
+            -0.5f, -0.5f, -0.5f,  -1f, 0f, 0f,   0f, 0.5f,
+            -0.5f, -0.5f,  0.5f,  -1f, 0f, 0f,   1f, 0.5f,
+            -0.5f,  0.0f,  0.5f,  -1f, 0f, 0f,   1f, 0f,
+            -0.5f,  0.0f, -0.5f,  -1f, 0f, 0f,   0f, 0f,
+
+            // Lower Step Tread Top (Z: 0.0..0.5, Y: 0.0)
+            -0.5f,  0.0f,  0.5f,   0f, 1f, 0f,   0f, 1f,
+             0.5f,  0.0f,  0.5f,   0f, 1f, 0f,   1f, 1f,
+             0.5f,  0.0f,  0.0f,   0f, 1f, 0f,   1f, 0.5f,
+            -0.5f,  0.0f,  0.0f,   0f, 1f, 0f,   0f, 0.5f,
+
+            // --- Upper Step Box ---
+            // Upper Step Front Riser (Z: 0.0, Y: 0.0..0.5)
+            -0.5f,  0.0f,  0.0f,   0f, 0f, 1f,   0f, 0.5f,
+             0.5f,  0.0f,  0.0f,   0f, 0f, 1f,   1f, 0.5f,
+             0.5f,  0.5f,  0.0f,   0f, 0f, 1f,   1f, 0f,
+            -0.5f,  0.5f,  0.0f,   0f, 0f, 1f,   0f, 0f,
+
+            // Upper Step Back (Z: -0.5, Y: 0.0..0.5)
+             0.5f,  0.0f, -0.5f,   0f, 0f, -1f,  0f, 0.5f,
+            -0.5f,  0.0f, -0.5f,   0f, 0f, -1f,  1f, 0.5f,
+            -0.5f,  0.5f, -0.5f,   0f, 0f, -1f,  1f, 0f,
+             0.5f,  0.5f, -0.5f,   0f, 0f, -1f,  0f, 0f,
+
+            // Upper Step Top Tread (Y: 0.5, Z: -0.5..0.0)
+            -0.5f,  0.5f,  0.0f,   0f, 1f, 0f,   0f, 0.5f,
+             0.5f,  0.5f,  0.0f,   0f, 1f, 0f,   1f, 0.5f,
+             0.5f,  0.5f, -0.5f,   0f, 1f, 0f,   1f, 0f,
+            -0.5f,  0.5f, -0.5f,   0f, 1f, 0f,   0f, 0f,
+
+            // Upper Step Right (X+)
+             0.5f,  0.0f,  0.0f,   1f, 0f, 0f,   0f, 0.5f,
+             0.5f,  0.0f, -0.5f,   1f, 0f, 0f,   0.5f, 0.5f,
+             0.5f,  0.5f, -0.5f,   1f, 0f, 0f,   0.5f, 0f,
+             0.5f,  0.5f,  0.0f,   1f, 0f, 0f,   0f, 0f,
+
+            // Upper Step Left (X-)
+            -0.5f,  0.0f, -0.5f,  -1f, 0f, 0f,   0f, 0.5f,
+            -0.5f,  0.0f,  0.0f,  -1f, 0f, 0f,   0.5f, 0.5f,
+            -0.5f,  0.5f,  0.0f,  -1f, 0f, 0f,   0.5f, 0f,
+            -0.5f,  0.5f, -0.5f,  -1f, 0f, 0f,   0f, 0f
+        )
+
+        val indices = shortArrayOf(
+            0, 1, 2, 0, 2, 3,        // Lower Front
+            4, 5, 6, 4, 6, 7,        // Lower Back
+            8, 9, 10, 8, 10, 11,     // Lower Bottom
+            12, 13, 14, 12, 14, 15,  // Lower Right
+            16, 17, 18, 16, 18, 19,  // Lower Left
+            20, 21, 22, 20, 22, 23,  // Lower Tread
+            24, 25, 26, 24, 26, 27,  // Upper Riser
+            28, 29, 30, 28, 30, 31,  // Upper Back
+            32, 33, 34, 32, 34, 35,  // Upper Top
+            36, 37, 38, 36, 38, 39,  // Upper Right
+            40, 41, 42, 40, 42, 43   // Upper Left
+        )
+
+        val vBuf = ByteBuffer.allocateDirect(vertices.size * 4).run {
+            order(ByteOrder.nativeOrder())
+            asFloatBuffer().apply { put(vertices); position(0) }
+        }
+
+        val iBuf = ByteBuffer.allocateDirect(indices.size * 2).run {
+            order(ByteOrder.nativeOrder())
+            asShortBuffer().apply { put(indices); position(0) }
+        }
+
+        return Mesh(vBuf, iBuf, indices.size)
+    }
 }

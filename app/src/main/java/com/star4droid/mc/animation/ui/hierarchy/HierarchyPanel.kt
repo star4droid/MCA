@@ -135,6 +135,8 @@ fun HierarchyNodeItem(
         SceneNodeType.CHARACTER_ROOT -> "🧑"
         SceneNodeType.CHARACTER_PART -> "🦴"
         SceneNodeType.BLOCK -> "🧱"
+        SceneNodeType.HALF_BLOCK -> "🧱½"
+        SceneNodeType.STEP_BLOCK -> "🪜"
         SceneNodeType.CAMERA -> "🎥"
         SceneNodeType.LIGHT -> "☀️"
         SceneNodeType.GROUND -> "🟩"

@@ -58,6 +58,8 @@ class SceneRenderer(
     var pickerPosition: Vec3? = null
 
     private var planeMesh: Mesh? = null
+    private var halfBlockMesh: Mesh? = null
+    private var stepBlockMesh: Mesh? = null
 
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
         GLES20.glEnable(GLES20.GL_DEPTH_TEST)
@@ -69,6 +71,8 @@ class SceneRenderer(
         cubeMesh = Geometry.createCubeMesh(1f, 1f, 1f)
         headMesh = Geometry.createHeadMesh(1f, 1f, 1f)
         planeMesh = Geometry.createPlaneMesh(1f, 1f)
+        halfBlockMesh = Geometry.createHalfBlockMesh()
+        stepBlockMesh = Geometry.createStepBlockMesh()
         gridMesh = Geometry.createGridMesh(30, 1.0f)
         wireframeMesh = Geometry.createBoundingWireframeMesh(1f, 1f, 1f)
         cameraFrustumMesh = Geometry.createCameraFrustumMesh(60f, 16f / 9f, 2.2f)
@@ -235,7 +239,7 @@ class SceneRenderer(
         isSelected: Boolean
     ) {
         when (node.type) {
-            SceneNodeType.BLOCK, SceneNodeType.CHARACTER_PART, SceneNodeType.GROUND, SceneNodeType.PLANE -> {
+            SceneNodeType.BLOCK, SceneNodeType.HALF_BLOCK, SceneNodeType.STEP_BLOCK, SceneNodeType.CHARACTER_PART, SceneNodeType.GROUND, SceneNodeType.PLANE -> {
                 // Combine node world matrix with local box dimension scaling
                 val nodeMat = node.worldMatrix.values
                 val dimScale = Mat4.scaling(node.boxDimensions)
@@ -280,6 +284,8 @@ class SceneRenderer(
                     objData != null && objData.triangles.isNotEmpty() -> {
                         objMeshCache.getOrPut(node.id) { Geometry.createObjMesh(objData) }
                     }
+                    node.type == SceneNodeType.HALF_BLOCK && halfBlockMesh != null -> halfBlockMesh!!
+                    node.type == SceneNodeType.STEP_BLOCK && stepBlockMesh != null -> stepBlockMesh!!
                     node.type == SceneNodeType.PLANE && planeMesh != null -> planeMesh!!
                     node.characterPartType == CharacterPartType.HEAD && headMesh != null -> headMesh!!
                     else -> cube

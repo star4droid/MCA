@@ -20,12 +20,12 @@ MCA is a native Android application built with **Jetpack Compose** and **OpenGL 
 ## Key Modules & Core Structure
 
 ### 1. 3D Rendering Engine (`com.star4droid.mc.animation.engine.rendering`)
-- **`SceneRenderer.kt`**: Main OpenGL renderer handling depth testing, clear colors (TimeOfDay lighting), camera view-projection matrices, scene nodes, selection highlights, ground grid, point/spot light sources, gizmo controls, and custom 3D OBJ mesh rendering.
+- **`SceneRenderer.kt`**: Main OpenGL renderer handling depth testing, clear colors (TimeOfDay lighting), camera view-projection matrices, scene nodes, selection highlights, ground grid, point/spot light sources, gizmo controls, custom 3D OBJ mesh rendering, and half/step block meshes.
 - **`Shader.kt`**: GLSL Vertex and Fragment shaders supporting texture mapping, ambient/sun directional light, 4 dynamic point/spot lights, and selection tinting.
-- **`Geometry.kt`**: Procedural mesh generators for cubes, heads, planes, grids, bounding wireframes, camera frustums, and custom `ObjTriangle` 3D meshes (`createObjMesh`).
+- **`Geometry.kt`**: Procedural mesh generators for cubes (`createCubeMesh`), half blocks / slabs (`createHalfBlockMesh`), step blocks / stairs (`createStepBlockMesh`), heads, planes, grids, bounding wireframes, camera frustums, and custom `ObjTriangle` 3D meshes (`createObjMesh`).
 
 ### 2. Scene Graph & Rigging (`com.star4droid.mc.animation.engine.scene`)
-- **`SceneNode.kt`**: Node object containing base/animated transforms, parent/child relationships, node type (`CHARACTER_ROOT`, `CHARACTER_PART`, `BLOCK`, `PLANE`, `CAMERA`, `LIGHT`, `GROUND`), material, bounding box dimensions, and optional 3D OBJ mesh data (`objModelData`).
+- **`SceneNode.kt`**: Node object containing base/animated transforms, parent/child relationships, node type (`CHARACTER_ROOT`, `CHARACTER_PART`, `BLOCK`, `HALF_BLOCK`, `STEP_BLOCK`, `PLANE`, `CAMERA`, `LIGHT`, `GROUND`), material, bounding box dimensions, and optional 3D OBJ mesh data (`objModelData`).
 - **`CharacterFactory.kt`**: Constructs hierarchically rigged Minecraft characters (Steve, Alex, Zombie, Knight, Miner) with 11 parent-child joint nodes (Torso -> Head, Upper Arm -> Forearm, Thigh -> Lower Leg / Calf).
 
 ### 3. Timeline & Block-Based Animation System (`com.star4droid.mc.animation.animation`)
@@ -43,9 +43,9 @@ MCA is a native Android application built with **Jetpack Compose** and **OpenGL 
 - **`CustomBlocksRepository.kt`**: Local file repository managing custom JSON animation presets.
 
 ### 6. Interactive Editor & Controls (`com.star4droid.mc.animation.ui`)
-- **`EditorScreen.kt`**: Standardized top scrollable panel with icon-only buttons (Rotate Screen, Lock, Select, Move, Rotate, Scale, Camera, Build, AI Studio, Custom Blocks Manager, Save), with separated panel toggles (Tree, Inspect, Timeline) placed cleanly under the top bar.
+- **`EditorScreen.kt`**: Standardized top scrollable panel with icon-only buttons (Rotate Screen, Lock, Select, Move, Rotate, Scale, Camera, Build, AI Studio, Custom Blocks Manager, Save), with separated panel toggles (Tree, Inspect, Timeline) placed cleanly under the top bar. Restructured Add Item menu includes `Add Block 🧊`, `Add Half Block (Slab) 🧱`, `Add Step Block (Stairs) 🪜`, `Add Character 👤`, `Add Light 💡`, `Add Plane 🗺️`, `Import 3D Model 📦`.
 - **`Viewport3D.kt` / `EditorGLSurfaceView.kt`**: Handles 3D touch input (Camera Orbit/Pan/Unlimited Zoom, Gizmo drag, Build Mode face-snapped block placement/deletion).
-- **`InspectorPanel.kt`**: Object property editor with horizontal touch-swipe transform fields and numeric keypad popup.
+- **`InspectorPanel.kt`**: Object property editor with horizontal touch-swipe transform fields, numeric keypad popup, and `formatFloatValue` flexible precision (up to 4 decimals, supporting values like `0.001` or `0.25`).
 - **`HierarchyPanel.kt`**: Scene graph tree view with dual horizontal and vertical scrolling.
 - **`TimelinePanel.kt`**: Multi-track timeline canvas supporting block dragging, track row organization, block settings dialogs, and instant block filtering per selected object.
 
@@ -58,13 +58,13 @@ MCA is a native Android application built with **Jetpack Compose** and **OpenGL 
   - `animations/`: Timeline action block and keyframe preset JSON files
   - `project.json`: Project metadata and timestamp logs
 
-### 8. Utilities & File Format Support (`com.star4droid.mc.animation.utils`)
-- **`ObjExporter.kt`**: Exports character models and scene geometry to `.obj` and `.mtl` formats via Storage Access Framework (SAF).
-- **`ObjImporter.kt`**: Asynchronously parses 3D `.obj` and `.mtl` face triangles, vertices, normals, and UVs into `ObjModelData` and `SceneNode` geometries.
+### 8. App Assets & Templates (`app/src/main/assets/`)
+- **`Sample/`**: Complete 30.0-second animated village city project template containing houses, watchtower with battlements, street lamps, roads, and 6 animated character rigs (Steve, Alex, Zombie, Knight Guard, Knight Patrol, Miner Joe) with cinematic camera tracks.
 
 ### 9. Skills Documentation (`skills/`)
 - **`skills/Block Animation Skills.md`**: JSON keyframe specification and instructions for block animations.
 - **`skills/Character Animations.skill.md`**: Multi-limb keyframe specification and limb hierarchy for character animations.
+- **`skills/Project Skills.skill.md`**: Complete technical guide for AI agents to inspect, modify, build, and serialize projects, scene graphs, 3D nodes (Cube, Slab, Stairs, Plane, Ground, Camera, Light, Character), and timeline keyframes.
 
 ---
 
@@ -75,3 +75,4 @@ MCA is a native Android application built with **Jetpack Compose** and **OpenGL 
 3. **AI Animations**: AI generates keyframe-based JSON targeting all 11 character limb nodes or block nodes. Keyframes specify `time`, `position`, `rotation`, and `scale`.
 4. **Per-Project Directory Structure**: All project files are stored in `Android/data/<package>/files/<projectName>/` with `models/`, `sounds/`, `textures/`, `scenes/`, `animations/` subfolders.
 5. **Top Toolbar Styling**: Top bar controls are strictly icon-only without text labels for clean visual hierarchy.
+6. **Scale & Numeric Formatting**: Scale supports micro-scaling down to `0.00001f`. Always format float displays with `formatFloatValue` (or Locale.US decimal point) to avoid rounding small values like `0.001` or `0.25`.

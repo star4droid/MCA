@@ -2,6 +2,8 @@ package com.star4droid.mc.animation.engine.scene
 
 enum class SceneNodeType {
     BLOCK,
+    HALF_BLOCK,
+    STEP_BLOCK,
     GROUP,
     CHARACTER_ROOT,
     CHARACTER_PART,

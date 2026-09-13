@@ -766,6 +766,50 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         addBlockAt(spawnPos, textureId)
     }
 
+    fun addHalfBlock(textureId: String = "grass") {
+        val spawnPos = sceneGraph.findNonOverlappingPosition(
+            requiredSpan = Vec3(1f, 0.5f, 1f),
+            preferredOrigin = camera.target + Vec3(0f, 0.25f, 0f)
+        )
+        val id = UUID.randomUUID().toString()
+        val node = SceneNode(
+            id = id,
+            name = "Slab ${sceneGraph.nodes.values.count { it.type == SceneNodeType.HALF_BLOCK } + 1}",
+            type = SceneNodeType.HALF_BLOCK,
+            baseTransform = Transform(position = spawnPos),
+            animatedTransform = Transform(position = spawnPos),
+            material = Material(textureAssetId = textureId),
+            boxDimensions = Vec3(1f, 0.5f, 1f)
+        )
+        historyManager.executeCommand(AddNodeCommand(sceneGraph, node, null))
+        selectNode(node.id)
+        SoundPlayer.playSound(SoundPlayer.SoundType.STEP)
+        updateHistoryState()
+        saveProject()
+    }
+
+    fun addStepBlock(textureId: String = "oak_planks") {
+        val spawnPos = sceneGraph.findNonOverlappingPosition(
+            requiredSpan = Vec3(1f, 1f, 1f),
+            preferredOrigin = camera.target + Vec3(0f, 0.5f, 0f)
+        )
+        val id = UUID.randomUUID().toString()
+        val node = SceneNode(
+            id = id,
+            name = "Stairs ${sceneGraph.nodes.values.count { it.type == SceneNodeType.STEP_BLOCK } + 1}",
+            type = SceneNodeType.STEP_BLOCK,
+            baseTransform = Transform(position = spawnPos),
+            animatedTransform = Transform(position = spawnPos),
+            material = Material(textureAssetId = textureId),
+            boxDimensions = Vec3(1f, 1f, 1f)
+        )
+        historyManager.executeCommand(AddNodeCommand(sceneGraph, node, null))
+        selectNode(node.id)
+        SoundPlayer.playSound(SoundPlayer.SoundType.STEP)
+        updateHistoryState()
+        saveProject()
+    }
+
     fun addPlane(textureId: String = "grass") {
         val spawnPos = camera.target + Vec3(0f, 0.05f, 0f)
         val id = UUID.randomUUID().toString()
