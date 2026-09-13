@@ -31,6 +31,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.Image
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -395,7 +397,7 @@ fun InspectorPanel(
                     colors = listOf(Color(0xFFEF4444), Color(0xFF22C55E), Color(0xFF3B82F6)),
                     sensitivity = 0.02f,
                     onValueChange = { idx, newVal ->
-                        val coerced = newVal.coerceAtLeast(0.05f)
+                        val coerced = newVal.coerceAtLeast(0.00001f)
                         val newScale = if (node.type == SceneNodeType.CHARACTER_ROOT) {
                             Vec3(coerced, coerced, coerced)
                         } else {
@@ -574,6 +576,9 @@ fun InspectorPanel(
                     // Built-in textures
                     BuiltInAssets.BLOCK_TEXTURES.forEach { def ->
                         val isSelected = node.material.textureAssetId == def.id
+                        val bmp = remember(def.id) {
+                            BuiltInAssets.createProceduralBlockBitmap(def).asImageBitmap()
+                        }
                         Box(
                             modifier = Modifier
                                 .size(34.dp)
@@ -584,8 +589,17 @@ fun InspectorPanel(
                                     color = if (isSelected) Color(0xFF22C55E) else Color(0xFF475569),
                                     shape = RoundedCornerShape(4.dp)
                                 )
-                                .clickable { onUpdateMaterial(def.id, node.material.opacity) }
-                        )
+                                .clickable { onUpdateMaterial(def.id, node.material.opacity) },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Image(
+                                bitmap = bmp,
+                                contentDescription = def.displayName,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop,
+                                filterQuality = FilterQuality.None
+                            )
+                        }
                     }
 
                     // Custom Imported textures

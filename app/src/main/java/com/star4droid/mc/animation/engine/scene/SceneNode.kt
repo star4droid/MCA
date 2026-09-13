@@ -37,9 +37,9 @@ data class SceneNode(
         val scaleZ = Vec3(worldMatrix[8], worldMatrix[9], worldMatrix[10]).length()
 
         val half = Vec3(
-            (boxDimensions.x * scaleX * 0.5f).coerceAtLeast(0.1f),
-            (boxDimensions.y * scaleY * 0.5f).coerceAtLeast(0.1f),
-            (boxDimensions.z * scaleZ * 0.5f).coerceAtLeast(0.1f)
+            (boxDimensions.x * scaleX * 0.5f).coerceAtLeast(0.00001f),
+            (boxDimensions.y * scaleY * 0.5f).coerceAtLeast(0.00001f),
+            (boxDimensions.z * scaleZ * 0.5f).coerceAtLeast(0.00001f)
         )
         return Pair(pos - half, pos + half)
     }

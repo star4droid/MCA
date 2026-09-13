@@ -64,6 +64,7 @@ import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Undo
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.WbSunny
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
@@ -72,6 +73,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -126,6 +128,8 @@ fun EditorScreen(
     }
 
     var addMenuOpen by remember { mutableStateOf(false) }
+    var showCharacterDialog by remember { mutableStateOf(false) }
+    var showLightDialog by remember { mutableStateOf(false) }
     var timeOfDayMenuOpen by remember { mutableStateOf(false) }
     var isAiStudioOpen by remember { mutableStateOf(false) }
     var isCustomBlocksManagerOpen by remember { mutableStateOf(false) }
@@ -312,61 +316,23 @@ fun EditorScreen(
                     DropdownMenu(
                         expanded = addMenuOpen,
                         onDismissRequest = { addMenuOpen = false },
-                        modifier = Modifier
-                            .background(Color(0xFF1E293B))
-                            .heightIn(max = 350.dp)
+                        modifier = Modifier.background(Color(0xFF1E293B))
                     ) {
                         DropdownMenuItem(
-                            text = { Text("Add Block (Grass)", color = Color.White) },
+                            text = { Text("Add Block 🧊", color = Color.White) },
                             onClick = { addMenuOpen = false; viewModel.addBlock("grass") }
                         )
                         DropdownMenuItem(
-                            text = { Text("Add Block (Wood)", color = Color.White) },
-                            onClick = { addMenuOpen = false; viewModel.addBlock("wood") }
+                            text = { Text("Add Character 👤", color = Color.White) },
+                            onClick = { addMenuOpen = false; showCharacterDialog = true }
                         )
                         DropdownMenuItem(
-                            text = { Text("Add Block (Diamond)", color = Color.White) },
-                            onClick = { addMenuOpen = false; viewModel.addBlock("diamond_block") }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Add Character (Steve)", color = Color.White) },
-                            onClick = { addMenuOpen = false; viewModel.addCharacter(false, "steve") }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Add Character (Alex)", color = Color.White) },
-                            onClick = { addMenuOpen = false; viewModel.addCharacter(true, "alex") }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Add Character (Zombie)", color = Color.White) },
-                            onClick = { addMenuOpen = false; viewModel.addCharacter(false, "zombie") }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Add Character (Knight)", color = Color.White) },
-                            onClick = { addMenuOpen = false; viewModel.addCharacter(false, "knight") }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Add Character (Miner)", color = Color.White) },
-                            onClick = { addMenuOpen = false; viewModel.addCharacter(false, "miner") }
+                            text = { Text("Add Light 💡", color = Color.White) },
+                            onClick = { addMenuOpen = false; showLightDialog = true }
                         )
                         DropdownMenuItem(
                             text = { Text("Add Plane 🗺️", color = Color.White) },
                             onClick = { addMenuOpen = false; viewModel.addPlane("grass") }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Add Scene Camera", color = Color.White) },
-                            onClick = { addMenuOpen = false; viewModel.addCamera() }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Add Sun Light ☀️", color = Color.White) },
-                            onClick = { addMenuOpen = false; viewModel.addLight(LightType.SUN) }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Add Point Light 💡", color = Color.White) },
-                            onClick = { addMenuOpen = false; viewModel.addLight(LightType.POINT) }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Add Spot Light 🔦", color = Color.White) },
-                            onClick = { addMenuOpen = false; viewModel.addLight(LightType.SPOT) }
                         )
                         DropdownMenuItem(
                             text = { Text("Import 3D Model (.obj) 📦", color = Color(0xFF38BDF8), fontWeight = FontWeight.Bold) },
@@ -711,6 +677,8 @@ fun EditorScreen(
         // File Browser Dialog
         if (uiState.isFileBrowserOpen) {
             FileBrowserDialog(
+                projectId = uiState.projectId,
+                projectName = uiState.projectName,
                 onDismiss = { viewModel.toggleFileBrowser() },
                 onFileSelected = { file ->
                     if (file.extension.lowercase() in listOf("obj", "json", "bbmodel", "gltf")) {
@@ -720,6 +688,81 @@ fun EditorScreen(
                 onTextureImported = { texId ->
                     uiState.selectedNodeId?.let { viewModel.updateNodeMaterial(it, texId) }
                 }
+            )
+        }
+
+        // Character Selection Dialog
+        if (showCharacterDialog) {
+            AlertDialog(
+                onDismissRequest = { showCharacterDialog = false },
+                title = { Text("Select Character", color = Color.White, fontWeight = FontWeight.Bold) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        val characters = listOf(
+                            "Steve 🧍‍♂️" to ("steve" to false),
+                            "Alex 🧍‍♀️" to ("alex" to true),
+                            "Zombie 🧟" to ("zombie" to false),
+                            "Knight 🛡️" to ("knight" to false),
+                            "Miner ⛏️" to ("miner" to false)
+                        )
+                        characters.forEach { (name, info) ->
+                            val (skinId, isAlex) = info
+                            Button(
+                                onClick = {
+                                    showCharacterDialog = false
+                                    viewModel.addCharacter(isAlex, skinId)
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF334155)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(name, color = Color.White)
+                            }
+                        }
+                    }
+                },
+                confirmButton = {},
+                dismissButton = {
+                    TextButton(onClick = { showCharacterDialog = false }) {
+                        Text("Cancel", color = Color(0xFF94A3B8))
+                    }
+                },
+                containerColor = Color(0xFF1E293B)
+            )
+        }
+
+        // Light Type Selection Dialog
+        if (showLightDialog) {
+            AlertDialog(
+                onDismissRequest = { showLightDialog = false },
+                title = { Text("Select Light Type", color = Color.White, fontWeight = FontWeight.Bold) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        val lights = listOf(
+                            "Point Light 💡" to LightType.POINT,
+                            "Sun Light ☀️" to LightType.SUN,
+                            "Spot Light 🔦" to LightType.SPOT
+                        )
+                        lights.forEach { (label, lightType) ->
+                            Button(
+                                onClick = {
+                                    showLightDialog = false
+                                    viewModel.addLight(lightType)
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF334155)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(label, color = Color.White)
+                            }
+                        }
+                    }
+                },
+                confirmButton = {},
+                dismissButton = {
+                    TextButton(onClick = { showLightDialog = false }) {
+                        Text("Cancel", color = Color(0xFF94A3B8))
+                    }
+                },
+                containerColor = Color(0xFF1E293B)
             )
         }
 
@@ -748,6 +791,8 @@ fun EditorScreen(
         // Custom Action Blocks Manager Dialog
         if (isCustomBlocksManagerOpen) {
             CustomBlocksManagerDialog(
+                projectId = uiState.projectId,
+                projectName = uiState.projectName,
                 onDismiss = { isCustomBlocksManagerOpen = false },
                 onApplyPresetToTimeline = { preset ->
                     viewModel.applyCustomBlockPreset(preset)

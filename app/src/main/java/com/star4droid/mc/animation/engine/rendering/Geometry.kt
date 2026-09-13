@@ -319,7 +319,7 @@ object Geometry {
         if (triangles.isEmpty()) {
             return createCubeMesh(1f, 1f, 1f)
         }
-        val maxTris = triangles.take(15000)
+        val maxTris = if (triangles.size > 21844) triangles.take(21844) else triangles
         val vertexCount = maxTris.size * 3
         val vertexData = FloatArray(vertexCount * 8)
         val indexData = ShortArray(vertexCount)

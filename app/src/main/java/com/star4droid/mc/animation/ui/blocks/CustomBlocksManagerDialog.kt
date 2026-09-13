@@ -29,6 +29,8 @@ import java.io.File
 
 @Composable
 fun CustomBlocksManagerDialog(
+    projectId: String? = null,
+    projectName: String = "",
     onDismiss: () -> Unit,
     onApplyPresetToTimeline: (CustomBlockPreset) -> Unit = {}
 ) {
@@ -41,7 +43,7 @@ fun CustomBlocksManagerDialog(
     var renameText by remember { mutableStateOf("") }
 
     fun refresh() {
-        presets = CustomBlocksRepository.loadCustomPresets(context)
+        presets = CustomBlocksRepository.loadCustomPresets(context, projectId, projectName)
     }
 
     LaunchedEffect(Unit) {
@@ -61,7 +63,9 @@ fun CustomBlocksManagerDialog(
                         name = "Imported_Block_${System.currentTimeMillis() % 1000}",
                         description = "Imported custom AI block preset",
                         category = if (text.contains("CHARACTER", ignoreCase = true)) "CHARACTER" else "BLOCK",
-                        jsonContent = text
+                        jsonContent = text,
+                        projectId = projectId,
+                        projectName = projectName
                     )
                     statusMessage = "Imported ${file.name} successfully!"
                     refresh()

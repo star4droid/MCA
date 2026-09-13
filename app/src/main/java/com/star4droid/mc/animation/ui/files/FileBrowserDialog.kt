@@ -45,16 +45,40 @@ enum class FileCategory(val label: String) {
 
 @Composable
 fun FileBrowserDialog(
+    projectId: String? = null,
+    projectName: String = "",
     onDismiss: () -> Unit,
     onFileSelected: (File) -> Unit = {},
     onTextureImported: (textureId: String) -> Unit = {}
 ) {
     val context = LocalContext.current
+    val projectRepo = remember { com.star4droid.mc.animation.project.ProjectRepository(context) }
     val baseAppDir = remember { context.getExternalFilesDir(null) ?: context.filesDir }
 
-    val texturesDir = remember { File(baseAppDir, "textures").apply { if (!exists()) mkdirs() } }
-    val soundsDir = remember { File(baseAppDir, "sounds").apply { if (!exists()) mkdirs() } }
-    val modelsDir = remember { File(baseAppDir, "models").apply { if (!exists()) mkdirs() } }
+    val projectDir = remember(projectId, projectName) {
+        if (!projectId.isNullOrEmpty()) {
+            projectRepo.getProjectDir(projectId, projectName).also {
+                projectRepo.ensureProjectSubdirs(it)
+            }
+        } else null
+    }
+
+    val texturesDir = remember(projectDir) {
+        if (projectDir != null) File(projectDir, "textures").apply { if (!exists()) mkdirs() }
+        else File(baseAppDir, "textures").apply { if (!exists()) mkdirs() }
+    }
+    val soundsDir = remember(projectDir) {
+        if (projectDir != null) File(projectDir, "sounds").apply { if (!exists()) mkdirs() }
+        else File(baseAppDir, "sounds").apply { if (!exists()) mkdirs() }
+    }
+    val modelsDir = remember(projectDir) {
+        if (projectDir != null) File(projectDir, "models").apply { if (!exists()) mkdirs() }
+        else File(baseAppDir, "models").apply { if (!exists()) mkdirs() }
+    }
+
+    val legacyTexturesDir = remember { File(baseAppDir, "textures") }
+    val legacySoundsDir = remember { File(baseAppDir, "sounds") }
+    val legacyModelsDir = remember { File(baseAppDir, "models") }
 
     var currentCategory by remember { mutableStateOf(FileCategory.ALL) }
     var files by remember { mutableStateOf<List<File>>(emptyList()) }
@@ -65,15 +89,31 @@ fun FileBrowserDialog(
 
     fun refreshFiles() {
         val allFiles = mutableListOf<File>()
-        texturesDir.listFiles()?.let { allFiles.addAll(it) }
-        soundsDir.listFiles()?.let { allFiles.addAll(it) }
-        modelsDir.listFiles()?.let { allFiles.addAll(it) }
+        val seenPaths = mutableSetOf<String>()
+
+        fun addFromDir(dir: File) {
+            dir.listFiles()?.forEach { f ->
+                if (seenPaths.add(f.absolutePath)) {
+                    allFiles.add(f)
+                }
+            }
+        }
+
+        addFromDir(texturesDir)
+        addFromDir(soundsDir)
+        addFromDir(modelsDir)
+
+        if (projectDir != null) {
+            addFromDir(legacyTexturesDir)
+            addFromDir(legacySoundsDir)
+            addFromDir(legacyModelsDir)
+        }
 
         val filtered = when (currentCategory) {
             FileCategory.ALL -> allFiles
             FileCategory.IMAGES -> allFiles.filter { it.extension.lowercase() in listOf("png", "jpg", "jpeg", "webp") }
             FileCategory.SOUNDS -> allFiles.filter { it.extension.lowercase() in listOf("mp3", "wav", "ogg", "m4a") }
-            FileCategory.MODELS -> allFiles.filter { it.extension.lowercase() in listOf("json", "obj", "bbmodel", "gltf") }
+            FileCategory.MODELS -> allFiles.filter { it.extension.lowercase() in listOf("json", "obj", "bbmodel", "gltf", "mtl") }
         }
         files = filtered.sortedByDescending { it.lastModified() }
     }

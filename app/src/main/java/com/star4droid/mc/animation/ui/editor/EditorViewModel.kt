@@ -742,14 +742,19 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
 
     // --- Scene Objects Management ---
     fun importObjFile(file: java.io.File) {
-        try {
-            val node = com.star4droid.mc.animation.utils.ObjImporter.parseObjFile(file.inputStream())
-            sceneGraph.addNode(node)
-            selectNode(node.id)
-            SoundPlayer.playSound(SoundPlayer.SoundType.STEP)
-            triggerRecomposition()
-        } catch (e: Exception) {
-            e.printStackTrace()
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val node = com.star4droid.mc.animation.utils.ObjImporter.parseObjFile(file)
+                kotlinx.coroutines.withContext(Dispatchers.Main) {
+                    sceneGraph.addNode(node)
+                    selectNode(node.id)
+                    SoundPlayer.playSound(SoundPlayer.SoundType.STEP)
+                    saveProject()
+                    triggerRecomposition()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 

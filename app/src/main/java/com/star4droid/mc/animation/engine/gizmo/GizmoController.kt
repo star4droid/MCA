@@ -243,34 +243,34 @@ class GizmoController(
                         GizmoAxis.CENTER -> (delta.x + delta.y + delta.z) * 0.5f
                         else -> (delta.x + delta.y + delta.z) * 0.5f
                     }
-                    val uniformFactor = (1.0f + s * 0.8f).coerceAtLeast(0.05f)
+                    val uniformFactor = (1.0f + s * 0.8f).coerceAtLeast(0.00001f)
                     Vec3(
-                        (initT.scale.x * uniformFactor).coerceAtLeast(0.05f),
-                        (initT.scale.y * uniformFactor).coerceAtLeast(0.05f),
-                        (initT.scale.z * uniformFactor).coerceAtLeast(0.05f)
+                        (initT.scale.x * uniformFactor).coerceAtLeast(0.00001f),
+                        (initT.scale.y * uniformFactor).coerceAtLeast(0.00001f),
+                        (initT.scale.z * uniformFactor).coerceAtLeast(0.00001f)
                     )
                 } else {
                     // For blocks, props, cubes: support precise per-axis scaling and center uniform scaling
                     when (activeAxis) {
                         GizmoAxis.X -> {
-                            val factor = (1.0f + delta.x * 0.8f).coerceAtLeast(0.05f)
-                            initT.scale.copy(x = (initT.scale.x * factor).coerceAtLeast(0.05f))
+                            val factor = (1.0f + delta.x * 0.8f).coerceAtLeast(0.00001f)
+                            initT.scale.copy(x = (initT.scale.x * factor).coerceAtLeast(0.00001f))
                         }
                         GizmoAxis.Y -> {
-                            val factor = (1.0f + delta.y * 0.8f).coerceAtLeast(0.05f)
-                            initT.scale.copy(y = (initT.scale.y * factor).coerceAtLeast(0.05f))
+                            val factor = (1.0f + delta.y * 0.8f).coerceAtLeast(0.00001f)
+                            initT.scale.copy(y = (initT.scale.y * factor).coerceAtLeast(0.00001f))
                         }
                         GizmoAxis.Z -> {
-                            val factor = (1.0f + delta.z * 0.8f).coerceAtLeast(0.05f)
-                            initT.scale.copy(z = (initT.scale.z * factor).coerceAtLeast(0.05f))
+                            val factor = (1.0f + delta.z * 0.8f).coerceAtLeast(0.00001f)
+                            initT.scale.copy(z = (initT.scale.z * factor).coerceAtLeast(0.00001f))
                         }
                         GizmoAxis.CENTER -> {
                             val s = (delta.x + delta.y + delta.z) * 0.5f
-                            val factor = (1.0f + s * 0.8f).coerceAtLeast(0.05f)
+                            val factor = (1.0f + s * 0.8f).coerceAtLeast(0.00001f)
                             Vec3(
-                                (initT.scale.x * factor).coerceAtLeast(0.05f),
-                                (initT.scale.y * factor).coerceAtLeast(0.05f),
-                                (initT.scale.z * factor).coerceAtLeast(0.05f)
+                                (initT.scale.x * factor).coerceAtLeast(0.00001f),
+                                (initT.scale.y * factor).coerceAtLeast(0.00001f),
+                                (initT.scale.z * factor).coerceAtLeast(0.00001f)
                             )
                         }
                         else -> initT.scale
