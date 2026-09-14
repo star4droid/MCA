@@ -126,13 +126,6 @@ class ProjectRepository(private val context: Context) {
         val legacyInt = File(context.filesDir, "projects")
         if (legacyInt.exists()) scanDir(legacyInt)
 
-        if (list.none { it.id == "sample_village_city" }) {
-            createSampleVillageProject()
-            list.clear()
-            seenIds.clear()
-            scanDir(externalBaseDir)
-        }
-
         return list.sortedByDescending { it.updatedAt }
     }
 
@@ -940,8 +933,28 @@ class ProjectRepository(private val context: Context) {
     }
 
     fun deleteProject(id: String): Boolean {
+        var deleted = false
         val dir = getProjectDir(id)
-        return if (dir.exists()) dir.deleteRecursively() else false
+        if (dir.exists()) {
+            deleted = dir.deleteRecursively() || deleted
+        }
+        try {
+            val directDirs = externalBaseDir.listFiles() ?: emptyArray()
+            for (d in directDirs) {
+                if (d.isDirectory) {
+                    val pf = File(d, "project.json")
+                    if (pf.exists()) {
+                        try {
+                            val json = JSONObject(pf.readText())
+                            if (json.optString("id") == id) {
+                                deleted = d.deleteRecursively() || deleted
+                            }
+                        } catch (e: Exception) {}
+                    }
+                }
+            }
+        } catch (e: Exception) {}
+        return deleted
     }
 
     fun renameProject(id: String, newName: String): Boolean {

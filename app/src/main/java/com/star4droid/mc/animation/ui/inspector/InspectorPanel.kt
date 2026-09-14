@@ -390,16 +390,53 @@ fun InspectorPanel(
                     }
                 }
             } else {
+                var keepScaleRatio by remember(node.id) { mutableStateOf(true) }
                 TransformChannelGroup(
                     title = if (node.type == SceneNodeType.CHARACTER_ROOT) "Scale (Entire Character)" else "Scale",
                     values = listOf(t.scale.x, t.scale.y, t.scale.z),
                     labels = listOf("X", "Y", "Z"),
                     colors = listOf(Color(0xFFEF4444), Color(0xFF22C55E), Color(0xFF3B82F6)),
                     sensitivity = 0.02f,
+                    headerTrailing = if (node.type != SceneNodeType.CHARACTER_ROOT) {
+                        {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .clickable { keepScaleRatio = !keepScaleRatio }
+                                    .background(if (keepScaleRatio) Color(0x3338BDF8) else Color(0x1194A3B8))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Icon(
+                                    if (keepScaleRatio) Icons.Default.Lock else Icons.Default.LockOpen,
+                                    contentDescription = "Keep Ratio",
+                                    tint = if (keepScaleRatio) Color(0xFF38BDF8) else Color(0xFF64748B),
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    if (keepScaleRatio) "Ratio Locked" else "Free Scale",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (keepScaleRatio) Color(0xFF38BDF8) else Color(0xFF64748B)
+                                )
+                            }
+                        }
+                    } else null,
                     onValueChange = { idx, newVal ->
                         val coerced = newVal.coerceAtLeast(0.00001f)
-                        val newScale = if (node.type == SceneNodeType.CHARACTER_ROOT) {
-                            Vec3(coerced, coerced, coerced)
+                        val oldVal = when (idx) {
+                            0 -> t.scale.x
+                            1 -> t.scale.y
+                            else -> t.scale.z
+                        }
+                        val ratio = if (Math.abs(oldVal) > 0.0001f) coerced / oldVal else coerced
+                        val newScale = if (keepScaleRatio || node.type == SceneNodeType.CHARACTER_ROOT) {
+                            Vec3(
+                                (t.scale.x * ratio).coerceAtLeast(0.00001f),
+                                (t.scale.y * ratio).coerceAtLeast(0.00001f),
+                                (t.scale.z * ratio).coerceAtLeast(0.00001f)
+                            )
                         } else {
                             when (idx) {
                                 0 -> t.scale.copy(x = coerced)
@@ -807,6 +844,7 @@ fun TransformChannelGroup(
     labels: List<String>,
     colors: List<Color>,
     sensitivity: Float,
+    headerTrailing: (@Composable () -> Unit)? = null,
     onValueChange: (Int, Float) -> Unit
 ) {
     var activeFieldIndex by remember { mutableStateOf<Int?>(null) }
@@ -814,7 +852,14 @@ fun TransformChannelGroup(
     val currentOnValueChange by rememberUpdatedState(onValueChange)
 
     Column {
-        Text(title, fontSize = 11.sp, color = Color(0xFF64748B), fontWeight = FontWeight.Medium)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(title, fontSize = 11.sp, color = Color(0xFF64748B), fontWeight = FontWeight.Medium)
+            headerTrailing?.invoke()
+        }
         Spacer(modifier = Modifier.height(4.dp))
 
         Row(

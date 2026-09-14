@@ -803,26 +803,40 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
                 val projectDir = projectRepository.getProjectDir(_uiState.value.projectId, _uiState.value.projectName)
                 val modelsDir = File(projectDir, "models").apply { if (!exists()) mkdirs() }
                 val destObjFile = File(modelsDir, file.name)
-                try {
-                    file.copyTo(destObjFile, overwrite = true)
-                } catch (e: Exception) {}
+                if (file.canonicalPath != destObjFile.canonicalPath) {
+                    try {
+                        file.copyTo(destObjFile, overwrite = true)
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
 
                 // Also copy accompanying mtl and texture files from parent folder into modelsDir
                 val parent = file.parentFile
-                if (parent != null && parent.absolutePath != modelsDir.absolutePath) {
+                if (parent != null && parent.canonicalPath != modelsDir.canonicalPath) {
                     parent.listFiles()?.forEach { sibling ->
                         val ext = sibling.extension.lowercase()
                         if (ext in listOf("mtl", "png", "jpg", "jpeg", "webp")) {
                             try {
-                                sibling.copyTo(File(modelsDir, sibling.name), overwrite = true)
+                                val destSibling = File(modelsDir, sibling.name)
+                                if (sibling.canonicalPath != destSibling.canonicalPath) {
+                                    sibling.copyTo(destSibling, overwrite = true)
+                                }
                             } catch (e: Exception) {}
                         }
                     }
                 }
 
-                val targetFile = if (destObjFile.exists()) destObjFile else file
+                val targetFile = if (destObjFile.exists() && destObjFile.length() > 0L) destObjFile else file
                 val node = com.star4droid.mc.animation.utils.ObjImporter.parseObjFile(targetFile)
-                node.objFilePath = if (destObjFile.exists()) "models/${destObjFile.name}" else file.absolutePath
+                node.name = file.nameWithoutExtension
+                node.objFilePath = if (destObjFile.exists() && destObjFile.length() > 0L) "models/${destObjFile.name}" else file.absolutePath
+
+                // Place at camera target
+                val spawnPos = camera.target.copy()
+                val currentScale = node.baseTransform.scale.copy()
+                node.baseTransform = Transform(position = spawnPos, scale = currentScale)
+                node.animatedTransform = Transform(position = spawnPos, scale = currentScale)
 
                 withContext(Dispatchers.Main) {
                     sceneGraph.addNode(node)

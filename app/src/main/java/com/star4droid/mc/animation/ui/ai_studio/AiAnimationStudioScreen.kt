@@ -42,6 +42,7 @@ import com.star4droid.mc.animation.ui.editor.EditorViewModel
 import com.star4droid.mc.animation.ui.editor.Viewport3D
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.util.UUID
 
@@ -579,28 +580,46 @@ fun AiAnimationStudioScreen(
                     showObjResult(name, objContent, colorHex, tex)
                 },
                 onSaveObj = { name, objContent, colorHex, tex ->
-                    com.star4droid.mc.animation.objects.SavedObjectsRepository.saveObject(
-                        context = context,
-                        name = name,
-                        objContent = objContent,
-                        colorHex = colorHex,
-                        textureAssetId = tex
-                    )
-                    android.widget.Toast.makeText(context, "Saved '$name' to Saved Objects!", android.widget.Toast.LENGTH_SHORT).show()
+                    scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                        try {
+                            com.star4droid.mc.animation.objects.SavedObjectsRepository.saveObject(
+                                context = context,
+                                name = name,
+                                objContent = objContent,
+                                colorHex = colorHex,
+                                textureAssetId = tex
+                            )
+                            withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                android.widget.Toast.makeText(context, "Saved '$name' to Saved Objects!", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                            withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                android.widget.Toast.makeText(context, "Failed to save: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
                 },
                 onAddToScene = { name, objContent, colorHex, tex ->
-                    try {
-                        val saved = com.star4droid.mc.animation.objects.SavedObjectsRepository.saveObject(
-                            context = context,
-                            name = name,
-                            objContent = objContent,
-                            colorHex = colorHex,
-                            textureAssetId = tex
-                        )
-                        viewModel.importObjFile(java.io.File(saved.objFilePath))
-                        android.widget.Toast.makeText(context, "Added '$name' to your scene!", android.widget.Toast.LENGTH_SHORT).show()
-                    } catch (e: Exception) {
-                        android.widget.Toast.makeText(context, "Failed to add to scene: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                    scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                        try {
+                            val saved = com.star4droid.mc.animation.objects.SavedObjectsRepository.saveObject(
+                                context = context,
+                                name = name,
+                                objContent = objContent,
+                                colorHex = colorHex,
+                                textureAssetId = tex
+                            )
+                            withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                viewModel.importObjFile(java.io.File(saved.objFilePath))
+                                android.widget.Toast.makeText(context, "Added '$name' to your scene!", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                            withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                android.widget.Toast.makeText(context, "Failed to add to scene: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        }
                     }
                 },
                 isObjectMode = (objectType == StudioObjectType.OBJECT),

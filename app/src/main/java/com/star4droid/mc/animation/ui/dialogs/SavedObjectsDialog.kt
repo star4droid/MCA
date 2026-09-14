@@ -24,6 +24,8 @@ import androidx.compose.ui.window.Dialog
 import com.star4droid.mc.animation.objects.SavedObjectItem
 import com.star4droid.mc.animation.objects.SavedObjectsRepository
 import com.star4droid.mc.animation.ui.editor.EditorViewModel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
 fun SavedObjectsDialog(
@@ -31,14 +33,26 @@ fun SavedObjectsDialog(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
-    var savedObjects by remember { mutableStateOf(SavedObjectsRepository.getSavedObjects(context)) }
+    val coroutineScope = rememberCoroutineScope()
+    var savedObjects by remember { mutableStateOf<List<SavedObjectItem>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
     var itemToRename by remember { mutableStateOf<SavedObjectItem?>(null) }
     var renameText by remember { mutableStateOf("") }
     var itemToDelete by remember { mutableStateOf<SavedObjectItem?>(null) }
     var showSaveSelectionConfirm by remember { mutableStateOf(false) }
 
     fun refresh() {
-        savedObjects = SavedObjectsRepository.getSavedObjects(context)
+        coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val list = SavedObjectsRepository.getSavedObjects(context)
+            withContext(kotlinx.coroutines.Dispatchers.Main) {
+                savedObjects = list
+                isLoading = false
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        refresh()
     }
 
     Dialog(onDismissRequest = onDismiss) {

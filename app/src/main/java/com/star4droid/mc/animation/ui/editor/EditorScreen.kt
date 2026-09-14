@@ -21,6 +21,9 @@ import androidx.compose.ui.input.pointer.changedToUp
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.text.font.FontFamily
 import com.star4droid.mc.animation.engine.math.Vec3
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -153,6 +156,7 @@ fun EditorScreen(
     var inspectorWidth by remember { mutableStateOf(defaultInspectorWidth) }
     var timelineHeight by remember { mutableStateOf(defaultTimelineHeight) }
     var timelineWidth by remember { mutableStateOf(defaultTimelineWidth) }
+    var cameraDragOffset by remember { mutableStateOf<Offset?>(null) }
 
     if (isAiStudioOpen) {
         AiAnimationStudioScreen(
@@ -692,37 +696,57 @@ fun EditorScreen(
                     }
                 }
 
-                // 2F. Camera Mode Control FAB (Visible when in Camera Mode or using Scene Camera)
-                androidx.compose.animation.AnimatedVisibility(
-                    visible = uiState.editorMode == EditorMode.CAMERA || uiState.isSceneCameraActive,
-                    enter = fadeIn() + slideInHorizontally(initialOffsetX = { it }),
-                    exit = fadeOut() + slideOutHorizontally(targetOffsetX = { it }),
+                // 2F. Freely Draggable Camera Control Icon (Independent of Timeline visibility)
+                // Positioned on top of the timeline on the left when static, never covering timeline controls
+                Box(
                     modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .padding(end = 16.dp)
+                        .align(Alignment.BottomStart)
+                        .padding(
+                            start = 16.dp,
+                            bottom = if (uiState.isTimelineOpen) (timelineHeight + 12.dp) else 32.dp
+                        )
+                        .offset {
+                            cameraDragOffset?.let {
+                                IntOffset(it.x.roundToInt(), it.y.roundToInt())
+                            } ?: IntOffset.Zero
+                        }
+                        .zIndex(30f)
                 ) {
-                    FloatingActionButton(
+                    Surface(
                         onClick = { viewModel.toggleCameraControl() },
-                        containerColor = if (uiState.isCameraControlActive) Color(0xFFF59E0B) else Color(0xFF1E293B),
-                        contentColor = if (uiState.isCameraControlActive) Color.Black else Color.White,
                         shape = CircleShape,
-                        modifier = Modifier.size(56.dp)
+                        color = if (uiState.isCameraControlActive) Color(0xFFF59E0B) else Color(0xFF1E293B),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.5.dp,
+                            if (uiState.isCameraControlActive) Color(0xFFFBBF24) else Color(0xFF38BDF8)
+                        ),
+                        shadowElevation = 8.dp,
+                        modifier = Modifier
+                            .size(54.dp)
+                            .pointerInput(Unit) {
+                                detectDragGestures { change, dragAmount ->
+                                    change.consume()
+                                    cameraDragOffset = (cameraDragOffset ?: Offset.Zero) + dragAmount
+                                }
+                            }
                     ) {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center,
-                            modifier = Modifier.padding(4.dp)
+                            modifier = Modifier.fillMaxSize()
                         ) {
                             Icon(
                                 if (uiState.isCameraControlActive) Icons.Default.TouchApp else Icons.Default.Videocam,
                                 contentDescription = "Camera Control",
+                                tint = if (uiState.isCameraControlActive) Color(0xFF0F172A) else Color.White,
                                 modifier = Modifier.size(22.dp)
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                "Control",
+                                "Cam",
                                 fontSize = 9.sp,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.Bold,
+                                color = if (uiState.isCameraControlActive) Color(0xFF0F172A) else Color.White
                             )
                         }
                     }

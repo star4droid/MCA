@@ -306,8 +306,13 @@ object GeminiApiService {
         val model = getSelectedModel(context)
 
         val systemInstruction = """
-            You are an expert 3D modeler and CAD specialist for Minecraft Animator (MCA).
-            Generate a complete, high-quality 3D object in Wavefront OBJ (.obj) format based on the user prompt.
+            You are an expert Minecraft 3D modeler and voxel CAD specialist for Minecraft Animator (MCA).
+            Generate a complete, high-quality 3D object in Wavefront OBJ (.obj) format based on the user's prompt.
+            
+            CRITICAL MINECRAFT STYLE REQUIREMENT:
+            - The generated object MUST strictly adhere to the MINECRAFT STYLE: blocky, voxel, cuboid geometry (just like Minecraft blocks, items, furniture, or mobs).
+            - The user can write FREELY about any subject or concept (tools, weapons, furniture, machines, vehicles, animals, fantasy, sci-fi, architecture, food, nature, etc.).
+            - Whatever the user asks for, translate it into iconic Minecraft-style blocky 3D geometry composed of rectangular prisms, cuboids, or stepped voxel planes.
             
             3D Wavefront OBJ Rules:
             1. Geometry & Coordinate System:
@@ -319,9 +324,9 @@ object GeminiApiService {
                - Generate faces using 'f v1 v2 v3' (triangles) or 'f v1 v2 v3 v4' (quads).
                - All face vertex indices MUST be 1-based positive integers referencing declared 'v' lines.
                - Normals should face outward (counter-clockwise vertex ordering).
-               - Construct a recognizable 3D representation of the requested object with between 12 and 150 faces.
+               - Construct a recognizable Minecraft-style blocky 3D representation with between 16 and 160 faces.
             3. Aesthetic & Materials:
-               - Minecraft / Voxel / Low-poly aesthetic suitable for Minecraft animation scenes.
+               - Authentic Minecraft / Voxel / Boxy aesthetic.
                - Choose a matching colorHex (#RRGGBB) representing the primary material.
                - Choose the most fitting suggestedTexture from:
                  "oak_planks", "stone", "iron_block", "gold_block", "diamond_block",
@@ -332,7 +337,7 @@ object GeminiApiService {
             Return ONLY a valid JSON object matching this schema:
             {
               "name": "Short Title of 3D Object",
-              "description": "Brief 1-sentence description of the 3D model features",
+              "description": "Brief 1-sentence description of the Minecraft-style 3D model",
               "colorHex": "#RRGGBB",
               "suggestedTexture": "diamond_block",
               "obj": "The complete Wavefront OBJ string starting with v definitions and ending with f definitions"

@@ -132,22 +132,18 @@ object ObjImporter {
         val rawSpanY = if (maxY >= minY) (maxY - minY).coerceAtLeast(0.01f) else 1.0f
         val rawSpanZ = if (maxZ >= minZ) (maxZ - minZ).coerceAtLeast(0.01f) else 1.0f
 
-        // Auto-scale large models down to standard scene scale (keeping exact aspect ratio)
+        // Auto-calculate scale for editor to fit standard scene proportions while keeping exact aspect ratio
         val maxSpan = maxOf(rawSpanX, rawSpanY, rawSpanZ)
         val targetMax = 2.0f // Standard character/object height in scene (2 blocks)
         val autoScale = if (maxSpan > targetMax) (targetMax / maxSpan) else 1.0f
 
-        val finalSpanX = rawSpanX * autoScale
-        val finalSpanY = rawSpanY * autoScale
-        val finalSpanZ = rawSpanZ * autoScale
-
-        // Center vertices around local origin (0,0,0) and apply autoScale
+        // Center vertices around local origin (0,0,0) without mutating vertex scale
         val centerVec = Vec3(centerX, centerY, centerZ)
         val centeredTriangles = triangles.map { t ->
             t.copy(
-                v1 = (t.v1 - centerVec) * autoScale,
-                v2 = (t.v2 - centerVec) * autoScale,
-                v3 = (t.v3 - centerVec) * autoScale
+                v1 = (t.v1 - centerVec),
+                v2 = (t.v2 - centerVec),
+                v3 = (t.v3 - centerVec)
             )
         }
 
@@ -221,17 +217,18 @@ object ObjImporter {
 
         val objData = ObjModelData(rawVertices, normals, uvs, centeredTriangles)
 
-        // Spawn position: placed nicely on ground at center
-        val spawnPos = Vec3(0f, finalSpanY * 0.5f, 0f)
+        // Spawn position and uniform scale in editor keeping exact ratio
+        val spawnPos = Vec3(0f, rawSpanY * autoScale * 0.5f, 0f)
+        val uniformScale = Vec3(autoScale, autoScale, autoScale)
 
         return SceneNode(
             id = UUID.randomUUID().toString(),
             name = defaultName,
             type = SceneNodeType.BLOCK,
-            baseTransform = Transform(position = spawnPos),
-            animatedTransform = Transform(position = spawnPos),
+            baseTransform = Transform(position = spawnPos, scale = uniformScale),
+            animatedTransform = Transform(position = spawnPos, scale = uniformScale),
             material = Material(textureAssetId = textureAssetId),
-            boxDimensions = Vec3(finalSpanX, finalSpanY, finalSpanZ),
+            boxDimensions = Vec3(rawSpanX, rawSpanY, rawSpanZ),
             objModelData = objData
         )
     }

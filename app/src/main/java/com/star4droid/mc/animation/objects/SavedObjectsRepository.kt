@@ -43,7 +43,7 @@ object SavedObjectsRepository {
     fun getSavedObjects(context: Context): List<SavedObjectItem> {
         val indexFile = getIndexFile(context)
         if (!indexFile.exists()) {
-            val defaults = createDefaultStarterObjects(context)
+            val defaults = createDefaultStarterObjectsDirectly(context)
             saveIndex(context, defaults)
             return defaults
         }
@@ -103,6 +103,12 @@ object SavedObjectsRepository {
         textureBitmap: Bitmap? = null,
         textureAssetId: String? = null
     ): SavedObjectItem {
+        val indexFile = getIndexFile(context)
+        if (!indexFile.exists()) {
+            val defaults = createDefaultStarterObjectsDirectly(context)
+            saveIndex(context, defaults)
+        }
+
         val id = UUID.randomUUID().toString()
         val itemDir = File(getStorageDir(context), id).apply { if (!exists()) mkdirs() }
         val objFile = File(itemDir, "model.obj")
@@ -224,8 +230,22 @@ object SavedObjectsRepository {
         return storage.walkTopDown().firstOrNull { it.isFile && it.name == fileName }
     }
 
-    private fun createDefaultStarterObjects(context: Context): List<SavedObjectItem> {
+    private fun createDefaultStarterObjectsDirectly(context: Context): List<SavedObjectItem> {
         val list = mutableListOf<SavedObjectItem>()
+
+        fun writeStarterItem(name: String, objText: String, colorHex: String): SavedObjectItem {
+            val id = UUID.randomUUID().toString()
+            val itemDir = File(getStorageDir(context), id).apply { if (!exists()) mkdirs() }
+            val objFile = File(itemDir, "model.obj")
+            objFile.writeText(objText)
+            return SavedObjectItem(
+                id = id,
+                name = name,
+                objFilePath = objFile.absolutePath,
+                texturePath = null,
+                colorHex = colorHex
+            )
+        }
 
         // 1. Wooden Chair
         val chairObj = """
@@ -268,7 +288,7 @@ object SavedObjectsRepository {
             f 17 18 22 21
             f 25 26 27 28
         """.trimIndent()
-        list.add(saveObject(context, "Wooden Chair", chairObj, colorHex = "#8B5A2B"))
+        list.add(writeStarterItem("Wooden Chair", chairObj, "#8B5A2B"))
 
         // 2. Stone Table
         val tableObj = """
@@ -297,7 +317,7 @@ object SavedObjectsRepository {
             f 12 11 15 16
             f 9 10 14 13
         """.trimIndent()
-        list.add(saveObject(context, "Stone Table", tableObj, colorHex = "#808080"))
+        list.add(writeStarterItem("Stone Table", tableObj, "#808080"))
 
         // 3. Golden Sword
         val swordObj = """
@@ -319,7 +339,7 @@ object SavedObjectsRepository {
             f 5 6 7 8
             f 9 10 11 12 13
         """.trimIndent()
-        list.add(saveObject(context, "Golden Sword", swordObj, colorHex = "#FFD700"))
+        list.add(writeStarterItem("Golden Sword", swordObj, "#FFD700"))
 
         return list
     }
