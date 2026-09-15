@@ -25,8 +25,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Undo
 import androidx.compose.material.icons.outlined.Key
+import com.star4droid.mc.animation.ai.AiProviderManager
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
@@ -130,7 +132,7 @@ fun SideAiDialog(
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
-                                "Side AI Assistant",
+                                "Side AI Assistant (${AiProviderManager.getSelectedProvider(context).displayName})",
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 16.sp,
                                 color = Color(0xFFF1F5F9)
@@ -143,8 +145,20 @@ fun SideAiDialog(
                         }
                     }
 
-                    IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = "Close", tint = Color(0xFF94A3B8))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        var showSettings by remember { mutableStateOf(false) }
+                        IconButton(onClick = { showSettings = true }) {
+                            Icon(Icons.Default.Settings, contentDescription = "AI Settings", tint = Color(0xFF94A3B8))
+                        }
+                        IconButton(onClick = onDismiss) {
+                            Icon(Icons.Default.Close, contentDescription = "Close", tint = Color(0xFF94A3B8))
+                        }
+
+                        if (showSettings) {
+                            com.star4droid.mc.animation.ui.ai_studio.GeminiSettingsDialog(
+                                onDismiss = { showSettings = false }
+                            )
+                        }
                     }
                 }
 

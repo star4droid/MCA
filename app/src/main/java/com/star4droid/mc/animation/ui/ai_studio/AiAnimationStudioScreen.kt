@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.star4droid.mc.animation.ai.AiChatHistoryRepository
+import com.star4droid.mc.animation.ai.AiProviderManager
 import com.star4droid.mc.animation.ai.ChatSession
 import com.star4droid.mc.animation.ai.GeminiApiService
 import com.star4droid.mc.animation.animation.AnimationEvaluator
@@ -301,7 +302,7 @@ fun AiAnimationStudioScreen(
         scope.launch {
             try {
                 if (objectType == StudioObjectType.OBJECT) {
-                    val result = GeminiApiService.generate3DObject(
+                    val result = AiProviderManager.generate3DObject(
                         context = context,
                         prompt = prompt,
                         chatHistory = messages
@@ -320,7 +321,7 @@ fun AiAnimationStudioScreen(
                     // Auto preview: clear preview first and show result!
                     showObjResult(result.name, result.objContent, result.colorHex, result.suggestedTexture)
                 } else {
-                    val jsonResult = GeminiApiService.generateAnimation(
+                    val jsonResult = AiProviderManager.generateAnimation(
                         context = context,
                         prompt = prompt,
                         targetType = objectType.name,

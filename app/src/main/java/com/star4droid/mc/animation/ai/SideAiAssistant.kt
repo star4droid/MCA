@@ -81,15 +81,17 @@ class SideAiAssistant(private val context: Context) {
             return@withContext proceduralResult
         }
 
-        // 3. If online API key available, query Gemini
-        val effectiveApiKey = if (!apiKeyOverride.isNullOrBlank()) apiKeyOverride
-        else try { BuildConfig.GEMINI_API_KEY } catch (e: Exception) { "" }
+        // 3. Check selected provider and API key
+        val provider = AiProviderManager.getSelectedProvider(context)
+        val apiKey = if (!apiKeyOverride.isNullOrBlank()) apiKeyOverride.trim()
+        else if (provider == AiProvider.OPENCODE) OpenCodeApiService.getApiKey(context)
+        else GeminiApiService.getApiKey(context)
 
-        if (effectiveApiKey.isNotBlank() && effectiveApiKey != "MY_GEMINI_API_KEY") {
+        if (provider == AiProvider.OPENCODE && apiKey.isNotBlank()) {
             try {
-                return@withContext executeWithGemini(
+                return@withContext executeWithOpenCode(
                     prompt = trimmed,
-                    apiKey = effectiveApiKey,
+                    apiKey = apiKey,
                     sceneGraph = sceneGraph,
                     camera = camera,
                     timeline = timeline,
@@ -97,11 +99,23 @@ class SideAiAssistant(private val context: Context) {
                     createInNewGroup = createInNewGroup
                 )
             } catch (e: Exception) {
-                // Fallback to intelligent fallback heuristic
+                return@withContext executeFallback(trimmed, sceneGraph, camera, timeline, selectedNodeId, createInNewGroup)
+            }
+        } else if (apiKey.isNotBlank() && apiKey != "MY_GEMINI_API_KEY") {
+            try {
+                return@withContext executeWithGemini(
+                    prompt = trimmed,
+                    apiKey = apiKey,
+                    sceneGraph = sceneGraph,
+                    camera = camera,
+                    timeline = timeline,
+                    selectedNodeId = selectedNodeId,
+                    createInNewGroup = createInNewGroup
+                )
+            } catch (e: Exception) {
                 return@withContext executeFallback(trimmed, sceneGraph, camera, timeline, selectedNodeId, createInNewGroup)
             }
         } else {
-            // Offline intelligent fallback
             return@withContext executeFallback(trimmed, sceneGraph, camera, timeline, selectedNodeId, createInNewGroup)
         }
     }
@@ -516,6 +530,124 @@ class SideAiAssistant(private val context: Context) {
             "Generated structure (${width}x${height}x${depth}) with ${createdIds.size} blocks.",
             createdIds
         )
+    }
+
+    private suspend fun executeWithOpenCode(
+        prompt: String,
+        apiKey: String,
+        sceneGraph: SceneGraph,
+        camera: EditorCamera,
+        timeline: TimelineAsset?,
+        selectedNodeId: String?,
+        createInNewGroup: Boolean
+    ): AiExecutionResult {
+        val systemPrompt = """
+You are an expert Minecraft 3D Scene AI assistant. Convert the user prompt into a structured JSON instruction.
+Possible actions:
+1. "CREATE_STRUCTURE": {"type":"house"|"tower"|"stairs"|"wall"|"cube", "width":int, "height":int, "depth":int, "material":"wood"|"stone"|"bricks"|"glass"|"gold_block"|"diamond_block"}
+2. "SPAWN_CHARACTER": {"skin":"steve"|"alex"|"zombie"|"knight"|"miner"}
+3. "ANIMATE": {"action":"walk"|"run"|"jump"|"wave"|"slide", "duration":float}
+4. "CAMERA": {"preset":"front"|"top"|"side"|"focus"}
+5. "GROUP": {"name":string}
+
+Respond ONLY with valid JSON.
+""".trimIndent()
+
+        val rawText = try {
+            OpenCodeApiService.executeOpenCodeCall(
+                apiKey = apiKey,
+                model = OpenCodeApiService.getSelectedModel(context),
+                prompt = prompt,
+                systemInstruction = systemPrompt
+            )
+        } catch (e: Exception) {
+            return executeFallback(prompt, sceneGraph, camera, timeline, selectedNodeId, createInNewGroup)
+        }
+
+        val cleanJson = rawText.substringAfter("```json").substringBefore("```").trim()
+        val command = try {
+            JSONObject(if (cleanJson.startsWith("{")) cleanJson else rawText)
+        } catch (e: Exception) {
+            return executeFallback(prompt, sceneGraph, camera, timeline, selectedNodeId, createInNewGroup)
+        }
+
+        val action = command.optString("action", "")
+        return when (action) {
+            "CREATE_STRUCTURE" -> {
+                val w = command.optInt("width", 4).toFloat()
+                val h = command.optInt("height", 3).toFloat()
+                val d = command.optInt("depth", 4).toFloat()
+                generateStructure(prompt, Vec3(w, h, d), sceneGraph, camera, createInNewGroup)
+            }
+            "SPAWN_CHARACTER" -> {
+                val skin = command.optString("skin", "steve")
+                val spawnPos = sceneGraph.findNonOverlappingPosition(
+                    requiredSpan = Vec3(1.5f, 2.0f, 1.5f),
+                    preferredOrigin = camera.target
+                )
+                val rootId = CharacterFactory.addCharacterToScene(
+                    sceneGraph = sceneGraph,
+                    name = skin.replaceFirstChar { it.uppercase() },
+                    isAlex = skin == "alex",
+                    skinId = skin,
+                    position = spawnPos
+                )
+                AiExecutionResult(true, "Spawned character '$skin'.", listOf(rootId))
+            }
+            "ANIMATE" -> {
+                val targetId = selectedNodeId ?: sceneGraph.nodes.values.firstOrNull { it.type == SceneNodeType.CHARACTER_ROOT }?.id
+                if (targetId != null && timeline != null) {
+                    val anim = command.optString("type", command.optString("anim", "walk")).lowercase()
+                    val animType = when {
+                        anim.contains("run") -> ActionBlockType.RUN
+                        anim.contains("jump") -> ActionBlockType.JUMP
+                        anim.contains("wave") -> ActionBlockType.WAVE
+                        anim.contains("slide") -> ActionBlockType.SLIDE_TO_POS
+                        anim.contains("scale") -> ActionBlockType.SCALE
+                        else -> ActionBlockType.WALK
+                    }
+                    val targetNode = sceneGraph.getNode(targetId)
+                    val nextStart = timeline.actionBlocks.maxOfOrNull { it.startTime + it.duration } ?: 0f
+                    val block = ActionBlock(
+                        name = "${targetNode?.name ?: "Character"} ${animType.displayName}",
+                        type = animType,
+                        targetNodeId = targetId,
+                        startTime = nextStart,
+                        duration = animType.defaultDuration,
+                        trackRow = timeline.actionBlocks.size % 4,
+                        startPosition = targetNode?.baseTransform?.position ?: Vec3.ZERO,
+                        targetPosition = (targetNode?.baseTransform?.position ?: Vec3.ZERO) + Vec3(0f, 0f, 3f),
+                        enablePositionMove = true
+                    )
+                    timeline.addActionBlock(block)
+                    AiExecutionResult(true, "Added animation '${animType.displayName}' for '${targetNode?.name}'.", emptyList(), listOf(block.id))
+                } else {
+                    executeFallback(prompt, sceneGraph, camera, timeline, selectedNodeId, createInNewGroup)
+                }
+            }
+            "CAMERA" -> {
+                val preset = command.optString("preset", "front").lowercase()
+                when (preset) {
+                    "top" -> { camera.pitch = 85f; camera.distance = 12f }
+                    "side" -> { camera.yaw = 90f; camera.pitch = 15f; camera.distance = 6f }
+                    else -> { camera.target = Vec3(0f, 1f, 0f); camera.yaw = 0f; camera.pitch = 10f; camera.distance = 6f }
+                }
+                AiExecutionResult(true, "Switched camera to $preset view.")
+            }
+            "GROUP" -> {
+                val name = command.optString("name", "New Group")
+                val groupNode = SceneNode(
+                    id = UUID.randomUUID().toString(),
+                    name = name,
+                    type = SceneNodeType.GROUP,
+                    baseTransform = Transform(position = camera.target)
+                )
+                sceneGraph.addNode(groupNode, null)
+                if (selectedNodeId != null) sceneGraph.reparentNode(selectedNodeId, groupNode.id)
+                AiExecutionResult(true, "Grouped objects under '$name'.", listOf(groupNode.id))
+            }
+            else -> executeFallback(prompt, sceneGraph, camera, timeline, selectedNodeId, createInNewGroup)
+        }
     }
 
     private suspend fun executeWithGemini(

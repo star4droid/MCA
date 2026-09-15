@@ -23,6 +23,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
+import com.star4droid.mc.animation.ai.AiProviderManager
 import com.star4droid.mc.animation.ui.blocks.CustomBlockPreset
 
 data class AiChatMessage(
@@ -97,7 +99,7 @@ fun AiAnimationChatOverlay(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        if (isLoading) "AI Working..." else "AI Animator Chat",
+                        if (isLoading) "AI Working..." else "AI Chat (${AiProviderManager.getSelectedProvider(LocalContext.current).displayName})",
                         fontWeight = FontWeight.Bold,
                         fontSize = 13.sp,
                         color = Color.White
