@@ -711,14 +711,10 @@ private fun resolveStudioTargetId(sceneGraph: SceneGraph, name: String): String 
         "head" -> CharacterPartType.HEAD
         "body", "torso" -> CharacterPartType.BODY
         "root" -> CharacterPartType.ROOT
-        "rightarm", "rightupperarm" -> CharacterPartType.RIGHT_ARM
-        "rightforearm", "righthand", "rightelbow" -> CharacterPartType.RIGHT_FOREARM
-        "leftarm", "leftupperarm" -> CharacterPartType.LEFT_ARM
-        "leftforearm", "lefthand", "leftelbow" -> CharacterPartType.LEFT_FOREARM
-        "rightleg", "rightthigh", "rightupperleg" -> CharacterPartType.RIGHT_LEG
-        "rightlowerleg", "rightcalf", "rightknee", "rightshin" -> CharacterPartType.RIGHT_LOWER_LEG
-        "leftleg", "leftthigh", "leftupperleg" -> CharacterPartType.LEFT_LEG
-        "leftlowerleg", "leftcalf", "leftknee", "leftshin" -> CharacterPartType.LEFT_LOWER_LEG
+        "rightarm", "rightupperarm", "rightforearm", "righthand", "rightelbow" -> CharacterPartType.RIGHT_ARM
+        "leftarm", "leftupperarm", "leftforearm", "lefthand", "leftelbow" -> CharacterPartType.LEFT_ARM
+        "rightleg", "rightthigh", "rightupperleg", "rightlowerleg", "rightcalf", "rightknee", "rightshin" -> CharacterPartType.RIGHT_LEG
+        "leftleg", "leftthigh", "leftupperleg", "leftlowerleg", "leftcalf", "leftknee", "leftshin" -> CharacterPartType.LEFT_LEG
         else -> null
     }
 

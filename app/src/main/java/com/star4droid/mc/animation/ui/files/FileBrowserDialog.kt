@@ -109,11 +109,13 @@ fun FileBrowserDialog(
             addFromDir(legacyModelsDir)
         }
 
+        val nonMetaFiles = allFiles.filter { !it.name.endsWith(".meta", ignoreCase = true) }
+
         val filtered = when (currentCategory) {
-            FileCategory.ALL -> allFiles
-            FileCategory.IMAGES -> allFiles.filter { it.extension.lowercase() in listOf("png", "jpg", "jpeg", "webp") }
-            FileCategory.SOUNDS -> allFiles.filter { it.extension.lowercase() in listOf("mp3", "wav", "ogg", "m4a") }
-            FileCategory.MODELS -> allFiles.filter { it.extension.lowercase() in listOf("json", "obj", "bbmodel", "gltf", "mtl") }
+            FileCategory.ALL -> nonMetaFiles
+            FileCategory.IMAGES -> nonMetaFiles.filter { it.extension.lowercase() in listOf("png", "jpg", "jpeg", "webp") }
+            FileCategory.SOUNDS -> nonMetaFiles.filter { it.extension.lowercase() in listOf("mp3", "wav", "ogg", "m4a") }
+            FileCategory.MODELS -> nonMetaFiles.filter { it.extension.lowercase() in listOf("json", "obj", "bbmodel", "gltf", "glb", "mtl") }
         }
         files = filtered.sortedByDescending { it.lastModified() }
     }
@@ -198,7 +200,7 @@ fun FileBrowserDialog(
                 val targetDir = when {
                     mime.startsWith("audio/") || lowerName.endsWith(".mp3") || lowerName.endsWith(".wav") || lowerName.endsWith(".ogg") -> soundsDir
                     mime.startsWith("image/") || lowerName.endsWith(".png") || lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg") || lowerName.endsWith(".webp") -> texturesDir
-                    lowerName.endsWith(".obj") || lowerName.endsWith(".mtl") || lowerName.endsWith(".json") -> modelsDir
+                    lowerName.endsWith(".obj") || lowerName.endsWith(".mtl") || lowerName.endsWith(".json") || lowerName.endsWith(".gltf") || lowerName.endsWith(".glb") -> modelsDir
                     else -> when (currentCategory) {
                         FileCategory.SOUNDS -> soundsDir
                         FileCategory.IMAGES -> texturesDir
@@ -404,7 +406,7 @@ fun FileBrowserDialog(
                             val isSelected = selectedFile == file
                             val isImage = file.extension.lowercase() in listOf("png", "jpg", "jpeg", "webp")
                             val isAudio = file.extension.lowercase() in listOf("mp3", "wav", "ogg", "m4a")
-                            val isModel = file.extension.lowercase() in listOf("obj", "json", "bbmodel", "gltf")
+                            val isModel = file.extension.lowercase() in listOf("obj", "json", "bbmodel", "gltf", "glb")
                             val isPlayingThis = isPlayingAudio == file.absolutePath
 
                             Card(

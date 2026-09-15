@@ -56,10 +56,15 @@ class SceneRenderer(
     private val viewProjMatrix = FloatArray(16)
     val invViewProjMatrix = Mat4()
     var pickerPosition: Vec3? = null
+    var modelAlpha: Float = 1.0f
+    var activeSkeleton: com.star4droid.mc.animation.engine.skeleton.Skeleton? = null
+    var selectedBoneIndex: Int = -1
 
     private var planeMesh: Mesh? = null
     private var halfBlockMesh: Mesh? = null
     private var stepBlockMesh: Mesh? = null
+    private var bendingLimbMesh: Mesh? = null
+    private var boneRenderer: BoneRenderer? = null
 
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
         GLES20.glEnable(GLES20.GL_DEPTH_TEST)
@@ -73,9 +78,11 @@ class SceneRenderer(
         planeMesh = Geometry.createPlaneMesh(1f, 1f)
         halfBlockMesh = Geometry.createHalfBlockMesh()
         stepBlockMesh = Geometry.createStepBlockMesh()
+        bendingLimbMesh = Geometry.createBendingLimbMesh(1f, 1f, 1f)
         gridMesh = Geometry.createGridMesh(30, 1.0f)
         wireframeMesh = Geometry.createBoundingWireframeMesh(1f, 1f, 1f)
         cameraFrustumMesh = Geometry.createCameraFrustumMesh(60f, 16f / 9f, 2.2f)
+        boneRenderer = BoneRenderer()
     }
 
     override fun onSurfaceChanged(gl: GL10?, width: Int, height: Int) {
@@ -211,6 +218,12 @@ class SceneRenderer(
                 }
             }
         }
+
+        // 6. Render 3D Bone Skeleton if active (Rig Mode)
+        activeSkeleton?.let { skel ->
+            val rootMat = selectedNodeId?.let { sceneGraph.getNode(it)?.worldMatrix?.values } ?: FloatArray(16) { if (it % 5 == 0) 1f else 0f }
+            boneRenderer?.renderSkeleton(skel, viewProjMatrix, rootMat, selectedBoneIndex)
+        }
     }
 
     private fun renderGrid(s: Shader, grid: Mesh, viewProj: FloatArray) {
@@ -225,6 +238,7 @@ class SceneRenderer(
         GLES20.glUniform4f(s.uObjectColor, 0.4f, 0.45f, 0.5f, 0.6f)
         GLES20.glUniform1f(s.uIsSelected, 0f)
         GLES20.glUniform1f(s.uUseTexture, 0f)
+        GLES20.glUniform1f(s.uAlpha, 1.0f)
 
         bindMesh(s, grid)
         GLES20.glDrawElements(GLES20.GL_LINES, grid.indexCount, GLES20.GL_UNSIGNED_SHORT, grid.indexBuffer)
@@ -258,6 +272,7 @@ class SceneRenderer(
                 val b = (matColor and 0xFF) / 255f
                 GLES20.glUniform4f(s.uObjectColor, r, g, b, node.material.opacity)
                 GLES20.glUniform1f(s.uIsSelected, if (isSelected) 1f else 0f)
+                GLES20.glUniform1f(s.uAlpha, modelAlpha)
 
                 // Texture
                 val texId = node.material.textureAssetId
@@ -271,7 +286,7 @@ class SceneRenderer(
                     GLES20.glUniform1f(s.uUseTexture, 0f)
                 }
 
-                val isTransparent = node.material.opacity < 0.98f || node.material.textureAssetId == "glass"
+                val isTransparent = node.material.opacity < 0.98f || node.material.textureAssetId == "glass" || modelAlpha < 0.98f
                 if (isTransparent) {
                     GLES20.glEnable(GLES20.GL_BLEND)
                     GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA)
@@ -288,6 +303,10 @@ class SceneRenderer(
                     node.type == SceneNodeType.STEP_BLOCK && stepBlockMesh != null -> stepBlockMesh!!
                     node.type == SceneNodeType.PLANE && planeMesh != null -> planeMesh!!
                     node.characterPartType == CharacterPartType.HEAD && headMesh != null -> headMesh!!
+                    (node.characterPartType == CharacterPartType.RIGHT_ARM ||
+                     node.characterPartType == CharacterPartType.LEFT_ARM ||
+                     node.characterPartType == CharacterPartType.RIGHT_LEG ||
+                     node.characterPartType == CharacterPartType.LEFT_LEG) && bendingLimbMesh != null -> bendingLimbMesh!!
                     else -> cube
                 }
 

@@ -19,12 +19,8 @@ enum class CharacterPartType {
     BODY,
     LEFT_ARM,
     RIGHT_ARM,
-    LEFT_FOREARM,
-    RIGHT_FOREARM,
     LEFT_LEG,
-    RIGHT_LEG,
-    LEFT_LOWER_LEG,
-    RIGHT_LOWER_LEG
+    RIGHT_LEG
 }
 
 enum class TimeOfDay {

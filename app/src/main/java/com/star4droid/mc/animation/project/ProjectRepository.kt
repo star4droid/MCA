@@ -30,6 +30,17 @@ class ProjectRepository(private val context: Context) {
 
     private val externalBaseDir: File
         get() {
+            try {
+                val primaryExt = android.os.Environment.getExternalStorageDirectory()
+                if (primaryExt != null && primaryExt.exists() && primaryExt.canWrite()) {
+                    val mcaDir = File(primaryExt, "MCA")
+                    if (mcaDir.exists() || mcaDir.mkdirs()) {
+                        return mcaDir
+                    }
+                }
+            } catch (e: Exception) {
+                // Fallback on restricted storage / Android 11+ scoped storage
+            }
             val ext = context.getExternalFilesDir(null)
             return ext ?: context.filesDir
         }
@@ -119,6 +130,13 @@ class ProjectRepository(private val context: Context) {
         }
 
         scanDir(externalBaseDir)
+
+        val appExt = context.getExternalFilesDir(null)
+        if (appExt != null && appExt != externalBaseDir) {
+            scanDir(appExt)
+            val appExtProj = File(appExt, "projects")
+            if (appExtProj.exists()) scanDir(appExtProj)
+        }
 
         val legacyExt = File(externalBaseDir, "projects")
         if (legacyExt.exists()) scanDir(legacyExt)
@@ -550,7 +568,7 @@ class ProjectRepository(private val context: Context) {
             name = "Steve Tavern Host",
             isAlex = false,
             skinId = "steve",
-            position = Vec3(12f, 0.5f, -6.5f)
+            position = Vec3(8.0f, 0f, -4.5f)
         )
 
         val alexPatrolRoot = CharacterFactory.addCharacterToScene(
@@ -558,7 +576,7 @@ class ProjectRepository(private val context: Context) {
             name = "Alex Castle Patrol",
             isAlex = true,
             skinId = "alex",
-            position = Vec3(-10f, 5f, 12f)
+            position = Vec3(-10f, 5.0f, 12f)
         )
 
         val knightCaptainRoot = CharacterFactory.addCharacterToScene(
@@ -592,7 +610,7 @@ class ProjectRepository(private val context: Context) {
             duration = 30.0f
         )
 
-        // Steve Traveler (Walks forward into town, waves, cheers, backflips, runs, taunts)
+        // Steve Traveler (Walks forward into town towards gate, waves, cheers, backflips, runs, taunts)
         mainTimeline.actionBlocks.add(
             ActionBlock(
                 id = "st1_w",
@@ -601,9 +619,10 @@ class ProjectRepository(private val context: Context) {
                 startTime = 0f,
                 duration = 8f,
                 speed = 1f,
-                isDeltaBased = true,
                 enablePositionMove = true,
-                moveVector = Vec3(0f, 0f, 1.2f),
+                startPosition = Vec3(0f, 0f, -15f),
+                targetPosition = Vec3(0f, 0f, -5f),
+                moveVector = Vec3(0f, 0f, 1.25f),
                 stepSize = 1f
             )
         )
@@ -618,9 +637,10 @@ class ProjectRepository(private val context: Context) {
                 startTime = 19f,
                 duration = 7f,
                 speed = 1.2f,
-                isDeltaBased = true,
                 enablePositionMove = true,
-                moveVector = Vec3(0f, 0f, 1.5f),
+                startPosition = Vec3(0f, 0f, -5f),
+                targetPosition = Vec3(0f, 0f, 6f),
+                moveVector = Vec3(0f, 0f, 1.57f),
                 stepSize = 1f
             )
         )
@@ -831,7 +851,7 @@ class ProjectRepository(private val context: Context) {
                     instances.add(
                         TimelineInstance(
                             timelineAssetId = obj.getString("timelineAssetId"),
-                            targetRootObjectId = obj.optString("targetRootObjectId", null),
+                            targetRootObjectId = if (obj.has("targetRootObjectId") && !obj.isNull("targetRootObjectId")) obj.getString("targetRootObjectId") else null,
                             startTime = obj.optDouble("startTime", 0.0).toFloat(),
                             speed = obj.optDouble("speed", 1.0).toFloat(),
                             loop = obj.optBoolean("loop", false),

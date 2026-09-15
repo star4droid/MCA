@@ -454,4 +454,101 @@ object Geometry {
 
         return Mesh(vBuf, iBuf, indices.size)
     }
+
+    fun createBendingLimbMesh(
+        dx: Float = 1.0f,
+        dy: Float = 1.0f,
+        dz: Float = 1.0f
+    ): Mesh {
+        val hx = dx * 0.5f
+        val hy = dy * 0.5f
+        val hz = dz * 0.5f
+
+        val vertices = floatArrayOf(
+            // Front Upper
+            -hx,  0f,  hz,   0f, 0f, 1f,   0f, 0.5f,
+             hx,  0f,  hz,   0f, 0f, 1f,   1f, 0.5f,
+             hx,  hy,  hz,   0f, 0f, 1f,   1f, 0f,
+            -hx,  hy,  hz,   0f, 0f, 1f,   0f, 0f,
+
+            // Front Lower
+            -hx, -hy,  hz,   0f, 0f, 1f,   0f, 1f,
+             hx, -hy,  hz,   0f, 0f, 1f,   1f, 1f,
+             hx,  0f,  hz,   0f, 0f, 1f,   1f, 0.5f,
+            -hx,  0f,  hz,   0f, 0f, 1f,   0f, 0.5f,
+
+            // Back Upper
+             hx,  0f, -hz,   0f, 0f, -1f,  0f, 0.5f,
+            -hx,  0f, -hz,   0f, 0f, -1f,  1f, 0.5f,
+            -hx,  hy, -hz,   0f, 0f, -1f,  1f, 0f,
+             hx,  hy, -hz,   0f, 0f, -1f,  0f, 0f,
+
+            // Back Lower
+             hx, -hy, -hz,   0f, 0f, -1f,  0f, 1f,
+            -hx, -hy, -hz,   0f, 0f, -1f,  1f, 1f,
+            -hx,  0f, -hz,   0f, 0f, -1f,  1f, 0.5f,
+             hx,  0f, -hz,   0f, 0f, -1f,  0f, 0.5f,
+
+            // Top Cap
+            -hx,  hy,  hz,   0f, 1f, 0f,   0f, 1f,
+             hx,  hy,  hz,   0f, 1f, 0f,   1f, 1f,
+             hx,  hy, -hz,   0f, 1f, 0f,   1f, 0f,
+            -hx,  hy, -hz,   0f, 1f, 0f,   0f, 0f,
+
+            // Bottom Cap
+            -hx, -hy, -hz,   0f, -1f, 0f,  0f, 1f,
+             hx, -hy, -hz,   0f, -1f, 0f,  1f, 1f,
+             hx, -hy,  hz,   0f, -1f, 0f,  1f, 0f,
+            -hx, -hy,  hz,   0f, -1f, 0f,  0f, 0f,
+
+            // Right Upper
+             hx,  0f,  hz,   1f, 0f, 0f,   0f, 0.5f,
+             hx,  0f, -hz,   1f, 0f, 0f,   1f, 0.5f,
+             hx,  hy, -hz,   1f, 0f, 0f,   1f, 0f,
+             hx,  hy,  hz,   1f, 0f, 0f,   0f, 0f,
+
+            // Right Lower
+             hx, -hy,  hz,   1f, 0f, 0f,   0f, 1f,
+             hx, -hy, -hz,   1f, 0f, 0f,   1f, 1f,
+             hx,  0f, -hz,   1f, 0f, 0f,   1f, 0.5f,
+             hx,  0f,  hz,   1f, 0f, 0f,   0f, 0.5f,
+
+            // Left Upper
+            -hx,  0f, -hz,  -1f, 0f, 0f,   0f, 0.5f,
+            -hx,  0f,  hz,  -1f, 0f, 0f,   1f, 0.5f,
+            -hx,  hy,  hz,  -1f, 0f, 0f,   1f, 0f,
+            -hx,  hy, -hz,  -1f, 0f, 0f,   0f, 0f,
+
+            // Left Lower
+            -hx, -hy, -hz,  -1f, 0f, 0f,   0f, 1f,
+            -hx, -hy,  hz,  -1f, 0f, 0f,   1f, 1f,
+            -hx,  0f,  hz,  -1f, 0f, 0f,   1f, 0.5f,
+            -hx,  0f, -hz,  -1f, 0f, 0f,   0f, 0.5f
+        )
+
+        val indices = shortArrayOf(
+            0, 1, 2, 0, 2, 3,        // Front Upper
+            4, 5, 6, 4, 6, 7,        // Front Lower
+            8, 9, 10, 8, 10, 11,     // Back Upper
+            12, 13, 14, 12, 14, 15,  // Back Lower
+            16, 17, 18, 16, 18, 19,  // Top Cap
+            20, 21, 22, 20, 22, 23,  // Bottom Cap
+            24, 25, 26, 24, 26, 27,  // Right Upper
+            28, 29, 30, 28, 30, 31,  // Right Lower
+            32, 33, 34, 32, 34, 35,  // Left Upper
+            36, 37, 38, 36, 38, 39   // Left Lower
+        )
+
+        val vBuf = ByteBuffer.allocateDirect(vertices.size * 4).run {
+            order(ByteOrder.nativeOrder())
+            asFloatBuffer().apply { put(vertices); position(0) }
+        }
+
+        val iBuf = ByteBuffer.allocateDirect(indices.size * 2).run {
+            order(ByteOrder.nativeOrder())
+            asShortBuffer().apply { put(indices); position(0) }
+        }
+
+        return Mesh(vBuf, iBuf, indices.size)
+    }
 }

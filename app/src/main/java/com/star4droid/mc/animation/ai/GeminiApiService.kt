@@ -322,10 +322,7 @@ object GeminiApiService {
             Target Type: $targetType
 
             Target Nodes for CHARACTER:
-            "root", "head", "body", "rightArm", "rightForearm",
-            "leftArm", "leftForearm", "rightLeg", "rightThigh",
-            "rightLowerLeg", "rightCalf", "leftLeg", "leftThigh",
-            "leftLowerLeg", "leftCalf".
+            "root", "head", "body", "rightArm", "leftArm", "rightLeg", "leftLeg".
 
             Target Nodes for BLOCK:
             "block" or "root".

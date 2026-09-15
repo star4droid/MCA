@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>خطة هندسة وتطوير نظام الهياكل العظمية والأنيميشن (Skeletal & Bone Animation System)</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0A0E17;
+            --bg-secondary: #111827;
+            --bg-card: #1F2937;
+            --bg-card-hover: #283548;
+            --text-main: #F9FAFB;
+            --text-muted: #9CA3AF;
+            --primary: #8B5CF6;
+            --primary-glow: rgba(139, 92, 246, 0.35);
+            --accent-blue: #38BDF8;
+            --accent-green: #10B981;
+            --accent-red: #EF4444;
+            --accent-amber: #F59E0B;
+            --border: #374151;
+            --border-highlight: #4B5563;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Cairo', system-ui, -apple-system, sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-main);
+            line-height: 1.8;
+            padding: 24px;
+            direction: rtl;
+        }
+
+        .container {
+            max-width: 1280px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            padding: 48px 24px;
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(56, 189, 248, 0.1) 100%);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            margin-bottom: 36px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+            position: relative;
+            overflow: hidden;
+        }
+
+        header::before {
+            content: "";
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, var(--primary-glow) 0%, transparent 60%);
+            opacity: 0.5;
+            pointer-events: none;
+        }
+
+        .badge {
+            display: inline-block;
+            background: rgba(139, 92, 246, 0.2);
+            color: var(--primary);
+            border: 1px solid var(--primary);
+            padding: 4px 16px;
+            border-radius: 9999px;
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 16px;
+        }
+
+        h1 {
+            font-size: 2.4rem;
+            font-weight: 900;
+            margin-bottom: 12px;
+            background: linear-gradient(135deg, #FFFFFF 0%, #CBD5E1 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .subtitle {
+            color: var(--text-muted);
+            font-size: 1.1rem;
+            max-width: 850px;
+            margin: 0 auto;
+        }
+
+        .section-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 1.6rem;
+            font-weight: 800;
+            margin: 40px 0 20px 0;
+            color: #FFFFFF;
+            border-bottom: 2px solid var(--border);
+            padding-bottom: 10px;
+        }
+
+        .section-title span.icon {
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            width: 38px;
+            height: 38px;
+            border-radius: 10px;
+            background: var(--primary);
+            color: white;
+            font-size: 20px;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 20px;
+            transition: transform 0.2s ease, border-color 0.2s ease;
+        }
+
+        .card:hover {
+            border-color: var(--primary);
+            transform: translateY(-2px);
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 20px;
+        }
+
+        .grid-3 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+        }
+
+        th, td {
+            padding: 14px 16px;
+            text-align: right;
+            border-bottom: 1px solid var(--border);
+        }
+
+        th {
+            background: rgba(31, 41, 55, 0.8);
+            color: var(--accent-blue);
+            font-weight: 700;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        .tag-pro {
+            color: var(--accent-green);
+            background: rgba(16, 185, 129, 0.15);
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        .tag-con {
+            color: var(--accent-red);
+            background: rgba(239, 68, 68, 0.15);
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        .feature-box {
+            background: var(--bg-secondary);
+            border-right: 4px solid var(--primary);
+            padding: 16px 20px;
+            border-radius: 0 12px 12px 0;
+            margin: 14px 0;
+        }
+
+        .code-block {
+            background: #0D1117;
+            border: 1px solid #30363D;
+            border-radius: 10px;
+            padding: 16px;
+            font-family: Consolas, monospace;
+            font-size: 13.5px;
+            color: #58A6FF;
+            direction: ltr;
+            text-align: left;
+            overflow-x: auto;
+            margin: 12px 0;
+        }
+
+        ul, ol {
+            margin-right: 24px;
+            margin-top: 8px;
+            margin-bottom: 8px;
+        }
+
+        li {
+            margin-bottom: 6px;
+            color: #E2E8F0;
+        }
+
+        .highlight-green {
+            color: var(--accent-green);
+            font-weight: bold;
+        }
+
+        .highlight-blue {
+            color: var(--accent-blue);
+            font-weight: bold;
+        }
+
+        .highlight-amber {
+            color: var(--accent-amber);
+            font-weight: bold;
+        }
+
+        .phase-badge {
+            background: var(--primary);
+            color: white;
+            padding: 2px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: bold;
+            display: inline-block;
+            margin-left: 8px;
+        }
+
+        .diagram {
+            background: #090D16;
+            border: 1px dashed var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            margin: 16px 0;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+
+    <!-- Header -->
+    <header>
+        <div class="badge">وثيقة معمارية شاملة - MCA Engine 2.0</div>
+        <h1>خطة تطوير نظام العظام والهيكل الحركي (Skeletal & Bone Animation)</h1>
+        <p class="subtitle">
+            خطة هندسية تنفيذية دقيقة لتحويل محرك MCA من نظام الأجزاء المنفصلة التقليدي إلى نظام عظام احترافي مرن ينثني بسلاسة على مكعب واحد، مع دعم استيراد GLB/GLTF/OBJ، وإعادة تسمية العظام، والربط التلقائي حتى بدون وضعيات T-Pose، مع ضمان سرعة 60 FPS على أضعف الهواتف.
+        </p>
+    </header>
+
+    <!-- 1. القيمة المضافة والإيجابيات والسلبيات -->
+    <h2 class="section-title"><span class="icon">💎</span> 1. القيمة المضافة والإيجابيات والسلبيات (Pros, Cons & Value)</h2>
+    
+    <div class="grid-2">
+        <div class="card">
+            <h3 style="color: var(--accent-green); margin-bottom: 12px;">✅ الإيجابيات والقيمة المضافة (Value & Pros)</h3>
+            <ul>
+                <li><strong class="highlight-green">انثناء طبيعي وسلس للأطراف:</strong> الذراع والرجل تكون مكعباً متصلاً واحداً ينثني كالمرفق والركبة الحقيقية، بدلاً من انفصال الأجزاء وظهور فراغات قبيحة عند الحركة.</li>
+                <li><strong class="highlight-green">دعم أي مجسم ثلاثي الأبعاد:</strong> لن يقتصر التطبيق على شخصيات ماينكرافت فقط؛ يمكن تحريك تنانين، وحوش، ملابس، سيارات، أسلحة، وشخصيات معقدة مستوردة.</li>
+                <li><strong class="highlight-green">سلاسة مذهلة (GPU Skinning):</strong> عملية تشويه النقاط (Deformation) تنفذ بنسبة 100% داخل كارت الشاشة (GPU Vertex Shader) بدون أي عبء على معالج الهاتف (CPU).</li>
+                <li><strong class="highlight-green">استيراد حركات موكاب جاهزة (Mocap):</strong> إمكانية استيراد آلاف الحركات الجاهزة من Mixamo أو Blender وتطبيقها فوراً على شخصياتك.</li>
+                <li><strong class="highlight-green">تقليل استهلاك الذاكرة والـ Draw Calls:</strong> رسم الشخصية بالكامل يتم في نداء رسم واحد (Single Draw Call) بدلاً من رسم كل جزء من الجسم بشكل منفصل.</li>
+            </ul>
+        </div>
+
+        <div class="card">
+            <h3 style="color: var(--accent-red); margin-bottom: 12px;">⚠️ التحديات وكيفية التغلب عليها (Cons & Mitigations)</h3>
+            <ul>
+                <li><strong class="highlight-red">تعديل كود الأنيميشن الحالي:</strong> يجب تحديث محرك حساب الحركة (AnimationEvaluator) ليحرك مصفوفات العظام بدلاً من عقد الـ SceneNode المنفصلة.
+                    <br><em>← الحل:</em> بناء طبقة وسيطة توافقية (Backward Compatibility Adapter) تترجم مكعبات الحركة القديمة إلى حركات عظام تلقائياً.</li>
+                <li><strong class="highlight-red">تحديث تعليمات الذكاء الاصطناعي:</strong> الذكاء الاصطناعي كان يولد مسارات لأجزاء منفصلة (rightForearm, leftLeg).
+                    <br><em>← الحل:</em> تحديث نماذج الـ Prompt في Gemini و OpenCode لتستهدف العظام القياسية (bone_arm_r, bone_elbow_r).</li>
+                <li><strong class="highlight-red">قيود معالجات الرسوم في الهواتف الضعيفة:</strong> بعض الهواتف القديمة تملك عدداً محدوداً من الـ Uniform Vectors في OpenGL ES 2.0.
+                    <br><em>← الحل:</em> ضغط مصفوفات العظام باستخدام مصفوفات 3x4 وحصر العظام بـ 32-48 عظمة للشخصية كحد أقصى.</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- 2. مقارنة صيغ الملفات -->
+    <h2 class="section-title"><span class="icon">📦</span> 2. اختيار صيغة العظام: لماذا GLTF/GLB هو الفائز المطلق؟</h2>
+    
+    <div class="card">
+        <p style="margin-bottom: 16px;">
+            السؤال الجوهري: <strong>هل نستخدم FBX أم GLTF/GLB أم OBJ؟</strong> إليك المقارنة التقنية الشاملة:
+        </p>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>المعيار</th>
+                    <th>صيغة GLB / GLTF 2.0 (الموصى بها بشدة)</th>
+                    <th>صيغة Autodesk FBX</th>
+                    <th>صيغة Wavefront OBJ</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>دعم العظام والأوزان</strong></td>
+                    <td><span class="tag-pro">دعم أصلي ممتاز (JOINTS_0, WEIGHTS_0, skins)</span></td>
+                    <td><span class="tag-pro">مدعوم</span></td>
+                    <td><span class="tag-con">غير مدعوم نهائياً (مجسمات ثابتة فقط)</span></td>
+                </tr>
+                <tr>
+                    <td><strong>الأداء على هواتف الأندرويد</strong></td>
+                    <td><span class="tag-pro">خارق للسرعة: قراءة ثنائية مباشرة (0-Copy ByteBuffer) إلى VBO</span></td>
+                    <td><span class="tag-con">ثقيل وبطيء جداً في الفك، يسبب تعليق التطبيق</span></td>
+                    <td><span class="tag-con">قراءة نصية بطيئة تستهلك الذاكرة</span></td>
+                </tr>
+                <tr>
+                    <td><strong>المكتبات والتوافقية</strong></td>
+                    <td>معيار مفتوح عالمي (Khronos Group)، خفيف الحجم ونقي</td>
+                    <td>صيغة مغلقة خاصة بشركة Autodesk، تتطلب مكتبات C++ ضخمة (+50MB)</td>
+                    <td>بسيط، لكنه لا يحفظ هياكل أو مفاتيح حركة</td>
+                </tr>
+                <tr>
+                    <td><strong>التوافق مع برامج التصميم</strong></td>
+                    <td>مدعوم بضغطة زر في Blender و Blockbench و Maya و 3ds Max</td>
+                    <td>مدعوم، ولكن يواجه مشاكل انقلاب المحاور (Y-up vs Z-up)</td>
+                    <td>مدعوم ولكن للمجسمات الصامتة فقط</td>
+                </tr>
+                <tr>
+                    <td><strong>الخلاصة والقرار</strong></td>
+                    <td><strong class="highlight-green">الخيار الأساسي والافتراضي في MCA</strong></td>
+                    <td><span class="tag-con">استبعاده من القراءة المباشرة على الهاتف</span></td>
+                    <td>يستخدم فقط كمجسم خام يتم ربطه بالعظام داخل التطبيق</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="feature-box">
+            <strong>القرار الهندسي المعتمد:</strong>
+            سيعتمد المحرك صيغة <strong>GLB (glTF 2.0 Binary)</strong> كصيغة أساسية شاملة للشخصيات والمجسمات المتحركة بالعظام لأنها تدمج المجسم + العظام + الحركة + الخامة في ملف واحد ثنائي خفيف جداً يقرأ في جزء من الثانية بدون استهلاك للذاكرة.
+        </div>
+    </div>
+
+    <!-- 3. تغيير الشخصيات: أطراف مكعبة واحدة تنثني بسلاسة -->
+    <h2 class="section-title"><span class="icon">🦴</span> 3. هيكلة الشخصيات الجديدة: الذراع والساق كمكعب واحد ينثني بسلاسة</h2>
+
+    <div class="card">
+        <h3 style="color: var(--accent-blue); margin-bottom: 12px;">كيف يعمل نظام المكعب المرن (Bending Single Cube)؟</h3>
+        <p>
+            حالياً في ماينكرافت التقليدي، تتكون الذراع من مكعبين منفصلين (العضد والساعد). عند تحريك المرفق، ينفصل المكعبان وتظهر زوايا حادة وثغرات قبيحة.
+            <br>
+            <strong>في النظام الجديد:</strong>
+        </p>
+
+        <div class="grid-3" style="margin-top: 16px;">
+            <div class="card" style="background: var(--bg-secondary);">
+                <h4 style="color: var(--accent-amber);">1. هندسة المكعب المقسم (Subdivided Cube)</h4>
+                <p style="font-size: 14px; color: var(--text-muted);">
+                    بدلاً من مكعب بسيط يتكون من 8 نقاط فقط، يتم تقسيم المكعب طولياً بإضافة حلقة وسطية من النقاط (Edge Loop) عند منطقة المرفق أو الركبة.
+                </p>
+            </div>
+
+            <div class="card" style="background: var(--bg-secondary);">
+                <h4 style="color: var(--accent-amber);">2. وضع عظمتين في المركز (Center Bones)</h4>
+                <p style="font-size: 14px; color: var(--text-muted);">
+                    يتم زرع عظمتين داخليتين في منتصف المكعب تماماً:
+                    <br>• عظمة عليا (Upper Limb)
+                    <br>• عظمة سفلى (Lower Limb)
+                    <br>ونقطة المفصل تكون في المنتصف تماماً.
+                </p>
+            </div>
+
+            <div class="card" style="background: var(--bg-secondary);">
+                <h4 style="color: var(--accent-amber);">3. توزيع الأوزان (Vertex Skin Weights)</h4>
+                <p style="font-size: 14px; color: var(--text-muted);">
+                    • نقاط الجزء العلوي تتأثر بنسبة 100% بالعظمة العليا.
+                    <br>• نقاط الجزء السفلي تتأثر بنسبة 100% بالعظمة السفلى.
+                    <br>• نقاط المفصل في المنتصف تتأثر بنسبة 50% لكلتا العظمتين، مما يعطي انثناءً ناعماً فائق الجمال دون تشوه الخامات!
+                </p>
+            </div>
+        </div>
+
+        <div class="diagram">
+            <pre style="font-family: monospace; color: var(--accent-blue); font-size: 14px;">
+    [ الجزء العلوي ]  ───>  العظمة العليا (Upper Bone) [وزن: 1.0]
+           │
+     ─── المفصل ───  ───>  منطقة الانثناء الناعم [وزن مشترك: 0.5 / 0.5]
+           │
+    [ الجزء السفلي ]  ───>  العظمة السفلى (Lower Bone) [وزن: 1.0]
+            </pre>
+        </div>
+    </div>
+
+    <!-- 4. تعديل الأنيميشن ومكعبات الحركة والذكاء الاصطناعي -->
+    <h2 class="section-title"><span class="icon">🎬</span> 4. تحديث نظام الحركة ومكعبات الأنيميشن والذكاء الاصطناعي</h2>
+
+    <div class="card">
+        <h3 style="color: var(--accent-blue); margin-bottom: 12px;">1. شجرة العظام القياسية في MCA (Standard Humanoid Rig Hierarchy)</h3>
+        <p style="margin-bottom: 12px;">
+            سنعتمد شجرة عظام قياسية موحدة تطبق على ستيف وأليكس وجميع الشخصيات:
+        </p>
+        <div class="code-block">
+root (الجذر في مستوى الأرض)
+└── hips (الحوض - العظمة المركزية)
+    ├── spine (العمود الفقري)
+    │   └── chest (الصدر)
+    │       ├── neck -> head (الرقبة والرأس)
+    │       ├── shoulder_left -> arm_left -> forearm_left -> hand_left (الذراع اليسرى)
+    │       └── shoulder_right -> arm_right -> forearm_right -> hand_right (الذراع اليمنى)
+    ├── leg_left -> calf_left -> foot_left (الساق اليسرى والقدم)
+    └── leg_right -> calf_right -> foot_right (الساق اليمنى والقدم)
+        </div>
+
+        <h3 style="color: var(--accent-blue); margin: 20px 0 12px 0;">2. تحديث مكعبات الأنيميشن (Walk, Run, Jump, Wave...)</h3>
+        <ul>
+            <li><strong>تحويل كود ActionBlockEvaluator:</strong> بدلاً من تدوير عقد الـ SceneNode بأكملها، يتم الآن تدوير العظام مباشرة (Euler Angles أو Quaternions) مثل:
+                <br><code>skeleton.getBone("arm_right").rotation.x = sin(time * speed) * angle;</code></li>
+            <li><strong>دعم الأنيميشن القائم على الإزاحة (Delta-Based):</strong> حركات المشي والجري تحافظ على توازن الشخصية وتسمح بالانتقال بسلاسة بين مشية وأخرى دون قفزات مفاجئة.</li>
+            <li><strong>تكامل خط الزمن (Timeline):</strong> يصبح بإمكان المستخدم اختيار أي عظمة باللمس، وتدويرها في الـ 3D Viewport، وتسجيل Keyframe لها في خط الزمن بنقرة واحدة!</li>
+        </ul>
+
+        <h3 style="color: var(--accent-blue); margin: 20px 0 12px 0;">3. تحديث تعليمات الذكاء الاصطناعي (AI Prompts & Schemas)</h3>
+        <p>
+            تحديث الـ System Instruction في <code>GeminiApiService</code> و <code>OpenCodeApiService</code> و <code>SideAiAssistant</code> ليفهم شجرة العظام القياسية بدلاً من أسماء العقد القديمة:
+        </p>
+        <div class="code-block">
+Target Bones for Humanoid / Characters:
+"hips", "spine", "chest", "head",
+"arm_left", "forearm_left", "arm_right", "forearm_right",
+"leg_left", "calf_left", "leg_right", "calf_right".
+
+Keyframe Rotation Properties:
+Output Euler angles in degrees [rx, ry, rz] per target bone.
+        </div>
+    </div>
+
+    <!-- 5. شاشة استوديو العظام الجديدة (Bone & Rigging Studio) -->
+    <h2 class="section-title"><span class="icon">🛠️</span> 5. شاشة استوديو العظام وتجهيز المجسمات (Bone & Rigging Studio)</h2>
+
+    <div class="card">
+        <p style="margin-bottom: 16px;">
+            ستتم إضافة شاشة مخصصة متطورة بالكامل داخل التطبيق باسم <strong>"Bone & Rigging Studio"</strong> تتيح للمستخدم استيراد وتجهيز أي مجسم:
+        </p>
+
+        <div class="grid-2">
+            <div class="card" style="background: var(--bg-secondary);">
+                <h4 style="color: var(--accent-blue);">أ. استيراد المجسمات (OBJ, GLTF, GLB)</h4>
+                <ul>
+                    <li>اختيار أي ملف ثلاثي الأبعاد من ذاكرة الجهاز.</li>
+                    <li>إذا كان الملف <strong>GLB/GLTF</strong> يحتوي على عظام بالفعل: يقوم الاستوديو بقراءتها فوراً وعرض هيكلها ثلاثي الأبعاد.</li>
+                    <li>إذا كان الملف <strong>OBJ</strong> صامتاً بدون عظام: يمكن إضافة عظام له يدوياً أو بنقرة واحدة تلقائياً.</li>
+                </ul>
+            </div>
+
+            <div class="card" style="background: var(--bg-secondary);">
+                <h4 style="color: var(--accent-blue);">ب. الوضع التلقائي الذكي للربط (Auto-Bind Any Pose)</h4>
+                <ul>
+                    <li><strong>حل مشكلة عدم وجود T-Pose أو A-Pose:</strong> الكثير من المجسمات المستوردة تكون في وضعيات راحة مائلة أو جلوس أو أذرع منسدلة.</li>
+                    <li>يستخدم الخوارزمي المطور <em>Bounding Geometry & Principal Component Analysis (PCA)</em> لتحديد:
+                        <br>1. موضع الرأس (أعلى قمة في المجسم).
+                        <br>2. موضع الساقين (القاع والامتدادات السفلية).
+                        <br>3. امتدادات الذراعين بناءً على المسارات الجانبية الأكثر بعداً عن المركز.</li>
+                    <li>توليد الهيكل وربط الأوزان تلقائياً (Distance / Geodesic Heat Weighting) بنقرة زر واحدة!</li>
+                </ul>
+            </div>
+
+            <div class="card" style="background: var(--bg-secondary);">
+                <h4 style="color: var(--accent-blue);">ج. التعديل اليدوي للعظام (Manual Bone Editor)</h4>
+                <ul>
+                    <li>زر <strong>"إضافة عظمة" (Add Bone):</strong> النقر على المجسم لغرس عظمة جديدة وسحب المفصل لتحديد اتجاهها.</li>
+                    <li><strong>تحديد العظام الأب والأبناء (Parenting):</strong> ربط الساعد بالعضد، واليد بالساعد بسهولة من قائمة الشجرة.</li>
+                    <li><strong>حذف، تكرار، ومحاذاة مرآتية (Mirroring):</strong> إعداد عظام الجانب الأيمن ثم الضغط على "Mirror to Left" لتوليد عظام الجانب الأيسر تلقائياً وبشكل متناظر!</li>
+                </ul>
+            </div>
+
+            <div class="card" style="background: var(--bg-secondary);">
+                <h4 style="color: var(--accent-blue);">د. إعادة تسمية وربط العظام (Bone Remapping & Retargeting)</h4>
+                <ul>
+                    <li>عند استيراد مجسم من Blender أو Mixamo قد تكون أسماء العظام مثل <code>mixamorig:RightArm</code> أو <code>Bip01_R_Hand</code>.</li>
+                    <li>يوفر الاستوديو جدول <strong>Bone Remapper</strong> ذكي:
+                        <br>يخمن العظام تلقائياً، مع قائمة منسدلة للمستخدم لتوصيل عظمة المجسم بعظمة التطبيق القياسية (مثلاً ربط <code>mixamorig:RightForeArm</code> بـ <code>forearm_right</code>).</li>
+                    <li>بمجرد الربط، تصبح جميع حركات التطبيق الجاهزة (المشي، الركض، التلويح) تعمل فوراً على المجسم المستورد!</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- 6. ضمان الأداء وسلاسة 60 FPS على الهواتف الضعيفة -->
+    <h2 class="section-title"><span class="icon">⚡</span> 6. أسرار الوصول لـ 60 FPS ثابتة على أضعف الهواتف (Low-End Mobile Optimization)</h2>
+
+    <div class="card">
+        <p style="margin-bottom: 14px;">
+            لكي يعمل محرك العظام بسرعة صاروخية دون أي تهنيج أو تسخين للهاتف، نطبق المبادئ الصارمة التالية:
+        </p>
+
+        <div class="grid-3">
+            <div class="card" style="background: var(--bg-secondary);">
+                <h4 style="color: var(--accent-green);">1. تشويه النقاط على الـ GPU حصراً</h4>
+                <p style="font-size: 13.5px; color: var(--text-muted);">
+                    يمنع منعاً باتاً حساب حركة النقاط برمجياً على المعالج CPU في لغة Kotlin، لأن هذا يسبب Garbage Collection ويسقط الفريمات. معالج الرسوميات (OpenGL ES Vertex Shader) يقوم بها في أجزاء من الملي ثانية.
+                </p>
+            </div>
+
+            <div class="card" style="background: var(--bg-secondary);">
+                <h4 style="color: var(--accent-green);">2. ضغط المصفوفات (Affine mat3x4)</h4>
+                <p style="font-size: 13.5px; color: var(--text-muted);">
+                    المصفوفة 4x4 تستهلك 4 متجهات Uniform. نرسل مصفوفة 3x4 فقط بدون الصف الأخير [0,0,0,1]، مما يوفر 25% من استهلاك الذاكرة ويتيح دعم 48 عظمة في نفس الوقت حتى على أجهزة Mali القديمة جداً.
+                </p>
+            </div>
+
+            <div class="card" style="background: var(--bg-secondary);">
+                <h4 style="color: var(--accent-green);">3. حد أقصى 4 عظام لكل نقطة</h4>
+                <p style="font-size: 13.5px; color: var(--text-muted);">
+                    الالتزام بمعيار 4 أوزان لكل نقطة كحد أقصى (Max 4 Bone Influences). هذا هو المعيار العالمي للألعاب ثلاثية الأبعاد على الموبايل، وتخزن الأوزان في هيئة <code>GL_UNSIGNED_BYTE</code> لتقليل حجم VBO بنسبة 75%.
+                </p>
+            </div>
+        </div>
+
+        <div class="feature-box">
+            <strong>كود الـ Vertex Shader عالي الكفاءة (Skinned Shader):</strong>
+            <div class="code-block">
+uniform mat4 uMVPMatrix;
+uniform mat4 uModelMatrix;
+uniform mat4 uBones[32]; // باليت العظام المضغوطة
+
+attribute vec4 aPosition;
+attribute vec3 aNormal;
+attribute vec2 aTexCoord;
+attribute vec4 aBoneIndices;
+attribute vec4 aBoneWeights;
+
+void main() {
+    // جمع تحويل العظام الأربعة المؤثرة
+    mat4 skinMat = uBones[int(aBoneIndices.x)] * aBoneWeights.x +
+                   uBones[int(aBoneIndices.y)] * aBoneWeights.y +
+                   uBones[int(aBoneIndices.z)] * aBoneWeights.z +
+                   uBones[int(aBoneIndices.w)] * aBoneWeights.w;
+
+    vec4 skinnedPosition = skinMat * aPosition;
+    gl_Position = uMVPMatrix * skinnedPosition;
+}
+            </div>
+        </div>
+    </div>
+
+    <!-- 7. مراحل التنفيذ البرمجية التفصيلية -->
+    <h2 class="section-title"><span class="icon">🚀</span> 7. خارطة طريق التنفيذ البرمجي خطوة بخطوة</h2>
+
+    <div class="card">
+        <ol style="margin-right: 20px;">
+            <li>
+                <span class="phase-badge">المرحلة 1</span>
+                <strong>بنية بيانات العظام وشيدر التشويه (Core Bone Data & Skinned Shader):</strong>
+                إنشاء كلاسات <code>Bone</code> و <code>Skeleton</code> و <code>SkinnedMesh</code>، وكتابة شيدر <code>SkinnedShader.kt</code> مع دعم الـ Matrix Palette.
+            </li>
+            <li style="margin-top: 12px;">
+                <span class="phase-badge">المرحلة 2</span>
+                <strong>إعادة بناء مجسمات ستيف وأليكس (Bending Single-Cube Limbs):</strong>
+                تعديل <code>Geometry.kt</code> لإنشاء مجسمات الأذرع والسيقان كمكعبات مقسمة طولياً مع العظام المركزية وأوزان الانثناء الناعمة.
+            </li>
+            <li style="margin-top: 12px;">
+                <span class="phase-badge">المرحلة 3</span>
+                <strong>قارئ ومستورد ملفات GLB / glTF 2.0:</strong>
+                كتابة <code>GlbImporter.kt</code> لقراءة المجسمات والهياكل العظمية وحركاتها بسرعة فائقة عبر DirectByteBuffer.
+            </li>
+            <li style="margin-top: 12px;">
+                <span class="phase-badge">المرحلة 4</span>
+                <strong>شاشة استوديو العظام وتجهيز المجسمات (Bone Rigging Studio Screen):</strong>
+                تصميم وبناء شاشة الاستوديو الجديدة بنظام Compose + OpenGL Viewport، مع أدوات إضافة العظام يدوياً، والربط التلقائي، وجدول إعادة تسمية العظام (Bone Remapping).
+            </li>
+            <li style="margin-top: 12px;">
+                <span class="phase-badge">المرحلة 5</span>
+                <strong>تحديث محرك الأنيميشن وذكاء Gemini و OpenCode:</strong>
+                تحديث <code>AnimationEvaluator.kt</code> لحساب حركات العظام، وتحديث الـ Prompts لـ Gemini و OpenCode لتوليد حركات العظام الجديدة.
+            </li>
+        </ol>
+    </div>
+
+    <div style="text-align: center; margin-top: 36px; padding: 20px; color: var(--text-muted); font-size: 14px; border-top: 1px solid var(--border);">
+        تم إعداد هذه الخطة بواسطة Antigravity بموجب متطلبات مشروع MCA Animation Engine 2.0
+    </div>
+
+</div>
+
+</body>
+</html>

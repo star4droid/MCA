@@ -100,12 +100,6 @@ fun clampRotationForPart(partType: com.star4droid.mc.animation.engine.scene.Char
             1 -> value.coerceIn(-45f, 45f)
             else -> value.coerceIn(-15f, 135f)
         }
-        com.star4droid.mc.animation.engine.scene.CharacterPartType.RIGHT_FOREARM,
-        com.star4droid.mc.animation.engine.scene.CharacterPartType.LEFT_FOREARM -> when (axis) {
-            0 -> value.coerceIn(0f, 145f)
-            1 -> value.coerceIn(-25f, 25f)
-            else -> value.coerceIn(-25f, 25f)
-        }
         com.star4droid.mc.animation.engine.scene.CharacterPartType.RIGHT_LEG -> when (axis) {
             0 -> value.coerceIn(-85f, 80f)
             1 -> value.coerceIn(-25f, 25f)
@@ -115,12 +109,6 @@ fun clampRotationForPart(partType: com.star4droid.mc.animation.engine.scene.Char
             0 -> value.coerceIn(-85f, 80f)
             1 -> value.coerceIn(-25f, 25f)
             else -> value.coerceIn(-20f, 30f)
-        }
-        com.star4droid.mc.animation.engine.scene.CharacterPartType.RIGHT_LOWER_LEG,
-        com.star4droid.mc.animation.engine.scene.CharacterPartType.LEFT_LOWER_LEG -> when (axis) {
-            0 -> value.coerceIn(-135f, 0f)
-            1 -> value.coerceIn(-20f, 20f)
-            else -> value.coerceIn(-20f, 20f)
         }
         com.star4droid.mc.animation.engine.scene.CharacterPartType.BODY -> when (axis) {
             0 -> value.coerceIn(-35f, 35f)

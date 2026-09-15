@@ -36,12 +36,7 @@ import com.star4droid.mc.animation.assets.BuiltInAssets
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.AccountTree
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.CenterFocusStrong
@@ -138,6 +133,7 @@ fun EditorScreen(
     var showLightDialog by remember { mutableStateOf(false) }
     var timeOfDayMenuOpen by remember { mutableStateOf(false) }
     var isAiStudioOpen by remember { mutableStateOf(false) }
+    var isRigStudioOpen by remember { mutableStateOf(false) }
     var isCustomBlocksManagerOpen by remember { mutableStateOf(false) }
     var isSavedObjectsOpen by remember { mutableStateOf(false) }
     var isMp4ExportDialogOpen by remember { mutableStateOf(false) }
@@ -158,7 +154,13 @@ fun EditorScreen(
     var timelineWidth by remember { mutableStateOf(defaultTimelineWidth) }
     var cameraDragOffset by remember { mutableStateOf<Offset?>(null) }
 
-    if (isAiStudioOpen) {
+    if (isRigStudioOpen) {
+        com.star4droid.mc.animation.ui.rig_studio.RigStudioScreen(
+            projectId = uiState.projectId,
+            projectName = uiState.projectName,
+            onBack = { isRigStudioOpen = false }
+        )
+    } else if (isAiStudioOpen) {
         AiAnimationStudioScreen(
             viewModel = viewModel,
             onBack = { isAiStudioOpen = false }
@@ -378,8 +380,12 @@ fun EditorScreen(
                             onClick = { addMenuOpen = false; viewModel.addPlane("grass") }
                         )
                         DropdownMenuItem(
-                            text = { Text("Import 3D Model (.obj) 📦", color = Color(0xFF38BDF8), fontWeight = FontWeight.Bold) },
+                            text = { Text("Import 3D Model (.obj, .gltf, .glb) 📦", color = Color(0xFF38BDF8), fontWeight = FontWeight.Bold) },
                             onClick = { addMenuOpen = false; viewModel.toggleFileBrowser() }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Bones & Rig Studio 🦴", color = Color(0xFFF59E0B), fontWeight = FontWeight.Bold) },
+                            onClick = { addMenuOpen = false; isRigStudioOpen = true }
                         )
                     }
                 }
@@ -697,13 +703,13 @@ fun EditorScreen(
                 }
 
                 // 2F. Freely Draggable Camera Control Icon (Independent of Timeline visibility)
-                // Positioned on top of the timeline on the left when static, never covering timeline controls
+                // Positioned on the bottom right above the timeline when static, never covering left-side timeline transport controls
                 Box(
                     modifier = Modifier
-                        .align(Alignment.BottomStart)
+                        .align(Alignment.BottomEnd)
                         .padding(
-                            start = 16.dp,
-                            bottom = if (uiState.isTimelineOpen) (timelineHeight + 12.dp) else 32.dp
+                            end = 16.dp,
+                            bottom = if (uiState.isTimelineOpen && !isLandscape) (timelineHeight + 20.dp) else 24.dp
                         )
                         .offset {
                             cameraDragOffset?.let {
@@ -791,13 +797,76 @@ fun EditorScreen(
                 projectName = uiState.projectName,
                 onDismiss = { viewModel.toggleFileBrowser() },
                 onFileSelected = { file ->
-                    if (file.extension.lowercase() in listOf("obj", "json", "bbmodel", "gltf")) {
+                    if (file.extension.lowercase() in listOf("obj", "json", "bbmodel", "gltf", "glb")) {
                         viewModel.importObjFile(file)
                     }
                 },
                 onTextureImported = { texId ->
                     uiState.selectedNodeId?.let { viewModel.updateNodeMaterial(it, texId) }
                 }
+            )
+        }
+
+        // Model Loading Error Dialog with Copy and Cancel
+        uiState.modelLoadError?.let { errText ->
+            AlertDialog(
+                onDismissRequest = { viewModel.clearModelLoadError() },
+                icon = {
+                    Icon(Icons.Default.ErrorOutline, contentDescription = null, tint = Color(0xFFEF4444), modifier = Modifier.size(32.dp))
+                },
+                title = {
+                    Text("Model Loading Failed", fontWeight = FontWeight.Bold, color = Color(0xFFF87171), fontSize = 16.sp)
+                },
+                text = {
+                    Column {
+                        Text(
+                            "An error occurred while loading the 3D model:",
+                            fontSize = 12.sp,
+                            color = Color(0xFFCBD5E1)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color(0xFF0F172A),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 200.dp)
+                        ) {
+                            androidx.compose.foundation.lazy.LazyColumn(modifier = Modifier.padding(8.dp)) {
+                                item {
+                                    Text(
+                                        errText,
+                                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                        fontSize = 11.sp,
+                                        color = Color(0xFFFCA5A5)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            val cm = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                            val clip = android.content.ClipData.newPlainText("MCA Model Error", errText)
+                            cm.setPrimaryClip(clip)
+                            android.widget.Toast.makeText(context, "Error copied to clipboard 📋", android.widget.Toast.LENGTH_SHORT).show()
+                            viewModel.clearModelLoadError()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF38BDF8))
+                    ) {
+                        Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Copy Error", color = Color(0xFF0F172A), fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { viewModel.clearModelLoadError() }) {
+                        Text("Cancel", color = Color(0xFF94A3B8))
+                    }
+                },
+                containerColor = Color(0xFF1E293B)
             )
         }
 

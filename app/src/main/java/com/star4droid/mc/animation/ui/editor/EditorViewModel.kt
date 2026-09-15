@@ -105,6 +105,7 @@ data class EditorUiState(
     val isLoadingModels: Boolean = false,
     val isCameraControlActive: Boolean = false,
     val isSavedObjectsOpen: Boolean = false,
+    val modelLoadError: String? = null,
     val version: Long = 0L // Incremented to trigger Compose recomposition
 )
 
@@ -614,14 +615,10 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
             "head" -> CharacterPartType.HEAD
             "body", "torso" -> CharacterPartType.BODY
             "root" -> CharacterPartType.ROOT
-            "rightarm", "rightupperarm" -> CharacterPartType.RIGHT_ARM
-            "rightforearm", "righthand", "rightelbow" -> CharacterPartType.RIGHT_FOREARM
-            "leftarm", "leftupperarm" -> CharacterPartType.LEFT_ARM
-            "leftforearm", "lefthand", "leftelbow" -> CharacterPartType.LEFT_FOREARM
-            "rightleg", "rightthigh", "rightupperleg" -> CharacterPartType.RIGHT_LEG
-            "rightlowerleg", "rightcalf", "rightknee", "rightshin" -> CharacterPartType.RIGHT_LOWER_LEG
-            "leftleg", "leftthigh", "leftupperleg" -> CharacterPartType.LEFT_LEG
-            "leftlowerleg", "leftcalf", "leftknee", "leftshin" -> CharacterPartType.LEFT_LOWER_LEG
+            "rightarm", "rightupperarm", "rightforearm", "righthand", "rightelbow" -> CharacterPartType.RIGHT_ARM
+            "leftarm", "leftupperarm", "leftforearm", "lefthand", "leftelbow" -> CharacterPartType.LEFT_ARM
+            "rightleg", "rightthigh", "rightupperleg", "rightlowerleg", "rightcalf", "rightknee", "rightshin" -> CharacterPartType.RIGHT_LEG
+            "leftleg", "leftthigh", "leftupperleg", "leftlowerleg", "leftcalf", "leftknee", "leftshin" -> CharacterPartType.LEFT_LEG
             else -> null
         }
 
@@ -843,16 +840,22 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
                     selectNode(node.id)
                     SoundPlayer.playSound(SoundPlayer.SoundType.STEP)
                     saveProject()
-                    _uiState.value = _uiState.value.copy(isLoadingModels = false)
+                    _uiState.value = _uiState.value.copy(isLoadingModels = false, modelLoadError = null)
                     triggerRecomposition()
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
                 withContext(Dispatchers.Main) {
-                    _uiState.value = _uiState.value.copy(isLoadingModels = false)
+                    val errDetails = "Failed to load model '${file.name}':\n\n${e.localizedMessage ?: e.toString()}\n\n" +
+                        e.stackTrace.take(6).joinToString("\n") { "  at $it" }
+                    _uiState.value = _uiState.value.copy(isLoadingModels = false, modelLoadError = errDetails)
                 }
             }
         }
+    }
+
+    fun clearModelLoadError() {
+        _uiState.value = _uiState.value.copy(modelLoadError = null)
     }
 
     fun toggleCameraControl() {

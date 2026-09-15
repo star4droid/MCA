@@ -21,6 +21,7 @@ class Shader(vertexSource: String, fragmentSource: String) {
     val uIsSelected: Int
     val uTexture: Int
     val uUseTexture: Int
+    val uAlpha: Int
 
     val uNumPointLights: Int
     val uPointLightPos: Int
@@ -60,6 +61,7 @@ class Shader(vertexSource: String, fragmentSource: String) {
         uIsSelected = GLES20.glGetUniformLocation(programId, "uIsSelected")
         uTexture = GLES20.glGetUniformLocation(programId, "uTexture")
         uUseTexture = GLES20.glGetUniformLocation(programId, "uUseTexture")
+        uAlpha = GLES20.glGetUniformLocation(programId, "uAlpha")
 
         uNumPointLights = GLES20.glGetUniformLocation(programId, "uNumPointLights")
         uPointLightPos = GLES20.glGetUniformLocation(programId, "uPointLightPos")
@@ -118,6 +120,7 @@ class Shader(vertexSource: String, fragmentSource: String) {
             uniform float uIsSelected;
             uniform sampler2D uTexture;
             uniform float uUseTexture;
+            uniform float uAlpha;
 
             uniform int uNumPointLights;
             uniform vec3 uPointLightPos[4];
@@ -136,7 +139,8 @@ class Shader(vertexSource: String, fragmentSource: String) {
                     baseColor = vec4(texColor.rgb * uObjectColor.rgb, texColor.a * uObjectColor.a);
                 }
 
-                if (baseColor.a < 0.05) {
+                float effectiveAlpha = baseColor.a * (uAlpha > 0.0 ? uAlpha : 1.0);
+                if (effectiveAlpha < 0.02) {
                     discard;
                 }
 
@@ -163,7 +167,7 @@ class Shader(vertexSource: String, fragmentSource: String) {
                     finalRgb = mix(finalRgb, uSelectionColor.rgb, 0.4);
                 }
 
-                gl_FragColor = vec4(finalRgb, baseColor.a);
+                gl_FragColor = vec4(finalRgb, effectiveAlpha);
             }
         """
     }
